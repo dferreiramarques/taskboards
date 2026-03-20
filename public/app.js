@@ -3,6 +3,7 @@
 // ─── STATE ───────────────────────────────────────────────────────────────────
 const STORAGE_KEY   = 'taskboard-v2-cards';
 const THEME_KEY     = 'taskboard-theme';
+const OWNERS_KEY    = 'taskboard-owners';
 
 let cards           = loadCards();
 let dragState       = null;
@@ -19,6 +20,58 @@ function loadCards() {
 }
 function saveCards() { localStorage.setItem(STORAGE_KEY, JSON.stringify(cards)); }
 function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
+
+// ─── OWNER HISTORY ────────────────────────────────────────────────────────────
+function loadOwners() {
+  try { return JSON.parse(localStorage.getItem(OWNERS_KEY)) || []; }
+  catch { return []; }
+}
+
+function saveOwner(name) {
+  if (!name || !name.trim()) return;
+  const owners = loadOwners();
+  const trimmed = name.trim();
+  if (!owners.includes(trimmed)) {
+    owners.unshift(trimmed);          // newest first
+    if (owners.length > 20) owners.pop(); // cap at 20
+    localStorage.setItem(OWNERS_KEY, JSON.stringify(owners));
+    refreshOwnerDatalist();
+  }
+}
+
+function refreshOwnerDatalist() {
+  const dl    = q('#owner-datalist');
+  const chips = q('#owner-chips');
+  const owners = loadOwners();
+
+  if (dl) {
+    dl.innerHTML = '';
+    owners.forEach(name => {
+      const opt = document.createElement('option');
+      opt.value = name;
+      dl.appendChild(opt);
+    });
+  }
+
+  if (chips) {
+    if (owners.length === 0) { chips.style.display = 'none'; return; }
+    chips.style.display = 'flex';
+    chips.innerHTML = '';
+    owners.slice(0, 6).forEach(name => {   // show max 6 recent
+      const chip = document.createElement('button');
+      chip.type = 'button';
+      chip.className = 'owner-chip';
+      chip.textContent = name;
+      chip.addEventListener('click', () => {
+        q('#input-owner').value = name;
+        // highlight the selected chip
+        chips.querySelectorAll('.owner-chip').forEach(c => c.classList.remove('active'));
+        chip.classList.add('active');
+      });
+      chips.appendChild(chip);
+    });
+  }
+}
 
 // ─── THEME ───────────────────────────────────────────────────────────────────
 function initTheme() {
@@ -58,6 +111,7 @@ function createCard(title, owner, dueDate, status) {
   const card = { id: uid(), title: title.trim(), owner: owner.trim(), dueDate, status, createdAt: Date.now() };
   cards.push(card);
   saveCards();
+  saveOwner(owner);   // persist owner name for future dropdowns
   render();
   // Animate the new card after render
   requestAnimationFrame(() => {
@@ -358,6 +412,7 @@ function openModal() {
   selectedColumn = 'todo';
   q('#modal').querySelectorAll('.modal__toggle-btn').forEach(b => b.classList.remove('active'));
   q('[data-col="todo"]').classList.add('active');
+  refreshOwnerDatalist();
   setTimeout(() => q('#input-title').focus(), 80);
 }
 
@@ -376,36 +431,43 @@ function shakeEl(el) {
 }
 
 // ─── CONFETTI ────────────────────────────────────────────────────────────────
-const CONFETTI_COLORS = ['#f0c040','#4f9cf9','#fb923c','#a855f7','#34d399','#f87171','#fbbf24'];
+// Orange/amber palette matching the logo accent
+const CONFETTI_COLORS = ['#fb923c','#f0c040','#fbbf24','#f97316','#fdba74','#fcd34d','#fed7aa'];
 
 function launchConfetti() {
   const layer = q('#confetti-layer');
-  const cx = window.innerWidth / 2;
-  const cy = window.innerHeight * 0.7;
-  const count = 28;
+  const count = 45;
+  // Burst from the done bar area (bottom of screen)
+  const originX = window.innerWidth  * 0.5;
+  const originY = window.innerHeight * 0.92;
 
   for (let i = 0; i < count; i++) {
     const piece = document.createElement('div');
     piece.className = 'confetti-piece';
     const color = CONFETTI_COLORS[Math.floor(Math.random() * CONFETTI_COLORS.length)];
-    const size  = 6 + Math.random() * 8;
-    const angle = (Math.random() * 360) * (Math.PI / 180);
-    const speed = 80 + Math.random() * 140;
-    const vx    = Math.cos(angle) * speed;
-    const vy    = -Math.abs(Math.sin(angle)) * speed - 40;
-    const dur   = 0.9 + Math.random() * 0.6;
+    const size  = 5 + Math.random() * 9;
+    // Spread in a fan upward: angle from -160° to -20° (pointing up)
+    const angle = (-160 + Math.random() * 140) * (Math.PI / 180);
+    const dist  = 80 + Math.random() * 280;
+    const tx    = Math.cos(angle) * dist;
+    const ty    = Math.sin(angle) * dist;  // negative = up
+    const dur   = 0.7 + Math.random() * 0.8;
+    const rot   = (Math.random() > 0.5 ? 1 : -1) * (360 + Math.random() * 720);
+    const shape = Math.random();
 
     piece.style.cssText = `
-      left: ${cx + vx * 0.05}px;
-      top:  ${cy + vy * 0.05}px;
+      left: ${originX + (Math.random() - 0.5) * 60}px;
+      top: ${originY}px;
       width: ${size}px;
-      height: ${size}px;
+      height: ${shape < 0.33 ? size : size * 0.4}px;
       background: ${color};
-      border-radius: ${Math.random() > .5 ? '50%' : '2px'};
+      border-radius: ${shape < 0.33 ? '50%' : shape < 0.66 ? '1px' : '50% 0'};
+      --tx: ${tx}px;
+      --ty: ${ty}px;
+      --rot: ${rot}deg;
       animation-duration: ${dur}s;
-      animation-delay: ${i * 0.025}s;
+      animation-delay: ${i * 0.018}s;
     `;
-
     layer.appendChild(piece);
     piece.addEventListener('animationend', () => piece.remove(), { once: true });
   }
@@ -422,12 +484,16 @@ function burstParticles(el) {
     const p = document.createElement('div');
     p.className = 'confetti-piece';
     const angle = (i / 10) * Math.PI * 2;
+    const dist  = 30 + Math.random() * 50;
     p.style.cssText = `
       left: ${cx}px; top: ${cy}px;
       width: 5px; height: 5px;
       background: ${CONFETTI_COLORS[i % CONFETTI_COLORS.length]};
       border-radius: 50%;
-      animation-duration: .6s;
+      --tx: ${Math.cos(angle) * dist}px;
+      --ty: ${Math.sin(angle) * dist}px;
+      --rot: ${Math.random() * 360}deg;
+      animation-duration: .55s;
       animation-delay: ${i * 0.03}s;
     `;
     layer.appendChild(p);
@@ -504,4 +570,5 @@ if ('serviceWorker' in navigator) {
 
 // ─── INIT ────────────────────────────────────────────────────────────────────
 initTheme();
+refreshOwnerDatalist();
 render();
