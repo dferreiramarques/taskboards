@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#0e0e16" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="TaskBoard" />
+  <title>TaskBoard</title>
+  <link rel="manifest" href="/manifest.json" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+
+  <!-- ARCHIVE BAR (top) -->
+  <div id="archive-bar" class="shelf shelf--archive" data-zone="archive">
+    <div class="shelf__header" id="archive-toggle">
+      <div class="shelf__header-left">
+        <span class="shelf__icon">◈</span>
+        <span class="shelf__label">ARQUIVO</span>
+        <span class="shelf__count" id="archive-count">0</span>
+      </div>
+      <span class="shelf__chevron" id="archive-chevron">▾</span>
+    </div>
+    <div class="shelf__body" id="archive-body">
+      <div class="shelf__cards" id="archive-cards"></div>
+      <div class="shelf__empty" id="archive-empty">Arrasta cartões aqui para arquivar</div>
+    </div>
+    <div class="drop-overlay" id="archive-drop-overlay">
+      <span>ARQUIVAR</span>
+    </div>
+  </div>
+
+  <!-- MAIN BOARD -->
+  <main class="board" id="board">
+
+    <!-- TODO COLUMN -->
+    <section class="column column--todo" id="todo-column" data-zone="todo">
+      <div class="column__header">
+        <span class="column__dot"></span>
+        <span class="column__title">A FAZER</span>
+        <span class="column__count" id="todo-count">0</span>
+      </div>
+      <div class="column__cards" id="todo-cards">
+        <div class="column__empty" id="todo-empty">Sem tarefas</div>
+      </div>
+    </section>
+
+    <!-- DIVIDER -->
+    <div class="board__divider"></div>
+
+    <!-- INPROGRESS COLUMN -->
+    <section class="column column--inprogress" id="inprogress-column" data-zone="inprogress">
+      <div class="column__header">
+        <span class="column__dot"></span>
+        <span class="column__title">EM PROGRESSO</span>
+        <span class="column__count" id="inprogress-count">0</span>
+      </div>
+      <div class="column__cards" id="inprogress-cards">
+        <div class="column__empty" id="inprogress-empty">Sem tarefas</div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- DONE BAR (bottom) -->
+  <div id="done-bar" class="shelf shelf--done" data-zone="done">
+    <div class="drop-overlay" id="done-drop-overlay">
+      <span>CONCLUÍDO ✓</span>
+    </div>
+    <div class="shelf__body shelf__body--done" id="done-body">
+      <div class="shelf__cards" id="done-cards"></div>
+      <div class="shelf__empty" id="done-empty">Arrasta cartões concluídos aqui</div>
+    </div>
+    <div class="shelf__header shelf__header--done" id="done-toggle">
+      <div class="shelf__header-left">
+        <span class="shelf__chevron" id="done-chevron">▴</span>
+        <span class="shelf__icon shelf__icon--done">✓</span>
+        <span class="shelf__label">CONCLUÍDO</span>
+        <span class="shelf__count" id="done-count">0</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- DRAG GHOST -->
+  <div id="drag-ghost" class="drag-ghost"></div>
+
+  <!-- FAB -->
+  <button id="fab" class="fab" title="Novo cartão">
+    <span class="fab__icon">+</span>
+  </button>
+
+  <!-- MODAL -->
+  <div id="modal-overlay" class="modal-overlay hidden">
+    <div class="modal" id="modal">
+      <div class="modal__header">
+        <span class="modal__title">NOVO CARTÃO</span>
+        <button class="modal__close" id="modal-close">✕</button>
+      </div>
+      <div class="modal__body">
+        <div class="modal__field">
+          <label class="modal__label" for="input-title">TÍTULO *</label>
+          <input class="modal__input" id="input-title" type="text" placeholder="Nome da tarefa..." maxlength="80" autocomplete="off" />
+        </div>
+        <div class="modal__field">
+          <label class="modal__label" for="input-owner">RESPONSÁVEL</label>
+          <input class="modal__input" id="input-owner" type="text" placeholder="Nome do responsável..." maxlength="40" autocomplete="off" />
+        </div>
+        <div class="modal__field">
+          <label class="modal__label" for="input-date">DATA ESTIMADA</label>
+          <input class="modal__input" id="input-date" type="date" />
+        </div>
+        <div class="modal__field">
+          <label class="modal__label">COLUNA INICIAL</label>
+          <div class="modal__toggle">
+            <button class="modal__toggle-btn active" data-col="todo">A FAZER</button>
+            <button class="modal__toggle-btn" data-col="inprogress">EM PROGRESSO</button>
+          </div>
+        </div>
+      </div>
+      <div class="modal__footer">
+        <button class="modal__submit" id="modal-submit">CRIAR CARTÃO</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- LONG PRESS PROGRESS RING -->
+  <svg id="press-ring" class="press-ring hidden" viewBox="0 0 40 40">
+    <circle cx="20" cy="20" r="16" class="press-ring__track" />
+    <circle cx="20" cy="20" r="16" class="press-ring__fill" id="press-ring-fill" />
+  </svg>
+
+  <script src="/app.js"></script>
+</body>
+</html>
