@@ -6,31 +6,75 @@
   <meta name="theme-color" content="#0e0e16" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <meta name="apple-mobile-web-app-title" content="TaskBoard" />
-  <title>TaskBoard</title>
-  <link rel="manifest" href="/manifest.json" />
+  <meta name="apple-mobile-web-app-title" content="Taskboards" />
+  <title>Taskboards</title>
+  <link rel="manifest" href="./manifest.json" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/style.css" />
+  <link rel="stylesheet" href="./style.css" />
+  <script src="./config.js"></script>
+  <!-- Google Identity Services — loaded async, app checks readiness -->
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
 <body>
   <div id="particles" class="particles" aria-hidden="true"></div>
   <div id="confetti-layer" class="confetti-layer" aria-hidden="true"></div>
 
+  <!-- ── TOP BAR ROW 1: login + brand + actions ── -->
   <div class="topbar">
+    <!-- LEFT: brand -->
     <div class="topbar__brand">
       <span class="topbar__logo">◈</span>
-      <span class="topbar__name">TASKBOARD</span>
+      <span class="topbar__name">TASKBOARDS</span>
     </div>
+
+    <!-- RIGHT: help + theme + Google login -->
     <div class="topbar__actions">
       <button id="help-btn" class="topbar__btn" title="How it works">?</button>
       <button id="theme-btn" class="topbar__btn topbar__btn--theme" title="Toggle theme">
         <span id="theme-icon">☽</span>
       </button>
+
+      <!-- Google SSO -->
+      <div class="topbar__login" id="login-area">
+        <button class="login-btn" id="login-btn" title="Sign in with Google">
+          <svg class="login-btn__icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+            <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+            <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05"/>
+            <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+          </svg>
+          <span class="login-btn__label">Sign in</span>
+        </button>
+        <div class="user-pill hidden" id="user-pill">
+          <img class="user-pill__avatar" id="user-avatar" src="" alt="" />
+          <span class="user-pill__name" id="user-name"></span>
+          <div class="user-pill__menu" id="user-menu">
+            <div class="user-pill__menu-email" id="user-email-menu"></div>
+            <div class="user-pill__menu-divider"></div>
+            <button class="user-pill__menu-item" id="logout-btn">Sign out</button>
+            <div class="sync-status" id="sync-status">
+              <span class="sync-dot" id="sync-dot"></span>
+              <span id="sync-label">Offline</span>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 
+  <!-- ── TOP BAR ROW 2: board tabs ── -->
+  <div class="boards-bar">
+    <button class="tab-nav" id="tab-prev" title="Previous boards">‹</button>
+    <div class="boards-tabs" id="boards-tabs">
+      <!-- Tabs injected by JS -->
+    </div>
+    <button class="tab-nav" id="tab-next" title="Next boards">›</button>
+    <button class="tab-add" id="add-board" title="New board">+</button>
+  </div>
+
+  <!-- ── ARCHIVE BAR ── -->
   <div id="archive-bar" class="shelf shelf--archive" data-zone="archive">
     <div class="shelf__header" id="archive-toggle">
       <div class="shelf__header-left">
@@ -52,6 +96,7 @@
     </div>
   </div>
 
+  <!-- ── MAIN BOARD ── -->
   <main class="board" id="board">
     <section class="column column--todo" id="todo-column" data-zone="todo">
       <div class="column__header">
@@ -82,6 +127,7 @@
     </section>
   </main>
 
+  <!-- ── DONE BAR ── -->
   <div id="done-bar" class="shelf shelf--done" data-zone="done">
     <div class="shelf__header" id="done-toggle">
       <div class="shelf__header-left">
@@ -109,6 +155,7 @@
     <span class="fab__icon">+</span>
   </button>
 
+  <!-- ── NEW CARD MODAL ── -->
   <div id="modal-overlay" class="modal-overlay hidden">
     <div class="modal" id="modal">
       <div class="modal__header">
@@ -122,7 +169,9 @@
         </div>
         <div class="modal__field">
           <label class="modal__label" for="input-owner">OWNER</label>
-          <input class="modal__input" id="input-owner" type="text" placeholder="Assignee name..." maxlength="40" autocomplete="off" />
+          <input class="modal__input" id="input-owner" type="text" placeholder="Assignee name..." maxlength="40" autocomplete="off" list="owner-datalist" />
+          <datalist id="owner-datalist"></datalist>
+          <div class="owner-chips" id="owner-chips"></div>
         </div>
         <div class="modal__field">
           <label class="modal__label" for="input-date">DUE DATE</label>
@@ -142,6 +191,7 @@
     </div>
   </div>
 
+  <!-- ── HELP MODAL ── -->
   <div id="help-overlay" class="modal-overlay hidden">
     <div class="modal modal--help" id="help-modal">
       <div class="modal__header">
@@ -152,7 +202,7 @@
         <div class="help__section">
           <div class="help__row">
             <span class="help__icon help__icon--archive">◈</span>
-            <div><strong>Archive bar</strong> — Idea bank at the top. Drag cards here to park them. Click the bar to expand and browse. Drag back to reactivate.</div>
+            <div><strong>Archive bar</strong> — Idea bank at the top. Drag cards here to park them. Click to expand/browse. Drag back to reactivate.</div>
           </div>
           <div class="help__row">
             <span class="help__icon help__icon--todo">○</span>
@@ -160,41 +210,46 @@
           </div>
           <div class="help__row">
             <span class="help__icon help__icon--inprog">◑</span>
-            <div><strong>In Progress</strong> — What's actively being worked on. Drag cards between columns to change status.</div>
+            <div><strong>In Progress</strong> — Drag cards between columns to change their status.</div>
           </div>
           <div class="help__row">
             <span class="help__icon help__icon--done">✓</span>
-            <div><strong>Done bar</strong> — Completed tasks. Click to expand and review. Cards can be moved back if needed.</div>
+            <div><strong>Done bar</strong> — Completed tasks. Click to expand and review.</div>
           </div>
         </div>
         <div class="help__divider"></div>
         <div class="help__section">
+          <div class="help__row">
+            <span class="help__icon">⊞</span>
+            <div><strong>Multiple boards</strong> — Click <strong>+</strong> in the boards bar to add a board. Double-click a tab to rename it. Use <strong>‹ ›</strong> to paginate when you have many boards.</div>
+          </div>
+          <div class="help__row">
+            <span class="help__icon">☁</span>
+            <div><strong>Google Drive sync</strong> — Sign in with Google to save all boards to your Drive automatically. Data is stored in a private app folder only this app can access.</div>
+          </div>
           <div class="help__row">
             <span class="help__icon">✦</span>
             <div><strong>New card</strong> — Click the <strong>+</strong> button or press <kbd>Ctrl</kbd> + <kbd>Enter</kbd>.</div>
           </div>
           <div class="help__row">
             <span class="help__icon" style="color:#ef4444">✕</span>
-            <div><strong>Delete a card</strong> — Hold for <strong>2 seconds</strong>. A red ✕ badge appears — click it to permanently delete.</div>
-          </div>
-          <div class="help__row">
-            <span class="help__icon">☀</span>
-            <div><strong>Theme</strong> — Toggle dark / light mode with the button in the top-right corner.</div>
+            <div><strong>Delete a card</strong> — Hold for <strong>2 seconds</strong>. A red ✕ badge appears — click it to delete.</div>
           </div>
         </div>
         <div class="help__divider"></div>
         <div class="help__tip">
-          📅 <strong>Red date</strong> = overdue &nbsp;·&nbsp; <strong>Orange date</strong> = due within 3 days &nbsp;·&nbsp; Data saves automatically in this browser.
+          📅 <strong>Red date</strong> = overdue &nbsp;·&nbsp; <strong>Orange date</strong> = due in ≤3 days &nbsp;·&nbsp; Data auto-saves to localStorage (or Google Drive when signed in).
         </div>
       </div>
     </div>
   </div>
 
+  <!-- Long press ring -->
   <svg id="press-ring" class="press-ring hidden" viewBox="0 0 44 44">
     <circle cx="22" cy="22" r="18" class="press-ring__track" />
     <circle cx="22" cy="22" r="18" class="press-ring__fill" id="press-ring-fill" />
   </svg>
 
-  <script src="/app.js"></script>
+  <script src="./app.js"></script>
 </body>
 </html>

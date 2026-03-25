@@ -1,6 +1,6 @@
 {
-  "name": "TaskBoard",
-  "short_name": "TaskBoard",
+  "name": "Taskboards",
+  "short_name": "Taskboards",
   "description": "Task management board with archive, todo, in-progress and done zones",
   "start_url": "/",
   "display": "standalone",

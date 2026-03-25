@@ -1,4 +1,4 @@
-# TaskBoard PWA
+# Taskboards PWA
 
 Task management board with Archive, ToDo, InProgress, and Done zones.
 
