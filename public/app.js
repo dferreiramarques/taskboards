@@ -109,18 +109,13 @@ function saveOwner(name) {
   }
 }
 
-// Returns only owners that are actually used in at least one card across all boards
+// Returns only owners that exist in at least one card — no localStorage fallback
 function activeOwners() {
   const inUse = new Set();
   boards.forEach(b => b.cards.forEach(c => { if (c.owner?.trim()) inUse.add(c.owner.trim()); }));
-  // Also include manually saved owners that are still recent (in case no cards yet)
-  const saved = loadOwners();
-  // Merge: inUse first, then saved ones not yet in cards (for current session)
-  const merged = [...inUse];
-  saved.forEach(o => { if (!inUse.has(o)) merged.push(o); });
-  // Persist cleaned list back
-  localStorage.setItem(LS_OWNERS, JSON.stringify(merged.slice(0, 30)));
-  return merged;
+  // Nuke the old saved list — cards are the source of truth
+  localStorage.removeItem(LS_OWNERS);
+  return [...inUse].sort((a, b) => a.localeCompare(b));
 }
 
 function refreshOwnerUI() {
@@ -537,7 +532,6 @@ function renameBoard(id, name) {
 function createCard(title, owner, dueDate, status) {
   const card = { id: uid(), title: title.trim(), owner: owner.trim(), dueDate, status, createdAt: Date.now() };
   currentBoard().cards.push(card);
-  saveOwner(owner);
   onDataChanged();
   renderBoard();
   requestAnimationFrame(() => {
