@@ -140,26 +140,31 @@ async function driveFindFile() {
 async function driveLoadData() {
   setSyncStatus('syncing', 'Loading from Drive…');
   try {
-    const fid = driveFileId || await driveFindFile();
+    // Always search by name — never use a potentially stale/undefined cached ID
+    const fid = await driveFindFile();
     if (!fid) {
-      console.log('driveLoadData: no file found in Drive yet');
+      console.log('driveLoadData: no file in Drive yet');
       setSyncStatus('synced', 'Drive ready');
+      driveFileId = null;
+      lsDel(LS_DRIVE_FID);
       return null;
     }
     driveFileId = fid;
     lsSet(LS_DRIVE_FID, fid);
 
-    const r = await fetch(`${DRIVE_API}/files/${fid}?alt=media`, { headers: { 'Authorization': `Bearer ${gAccessToken}` } });
+    console.log('driveLoadData: fetching file', fid);
+    const r = await fetch(`${DRIVE_API}/files/${fid}?alt=media`, {
+      headers: { 'Authorization': `Bearer ${gAccessToken}` }
+    });
     if (!r.ok) {
       const text = await r.text().catch(() => '');
       console.error('driveLoadData fetch failed:', r.status, text);
-      // 404 = file was deleted from Drive, clear cached ID
       if (r.status === 404) { driveFileId = null; lsDel(LS_DRIVE_FID); }
       throw new Error(`HTTP ${r.status}`);
     }
 
     const data = await r.json();
-    console.log('driveLoadData success — boards:', data.boards?.length, 'savedAt:', new Date(data.savedAt).toLocaleString());
+    console.log('driveLoadData success — boards:', data.boards?.length, 'savedAt:', data.savedAt ? new Date(data.savedAt).toLocaleString() : 'unknown');
     setSyncStatus('synced', 'Loaded from Drive ✓');
     return data;
   } catch (err) {

@@ -14,6 +14,14 @@
   <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="./style.css" />
   <script src="./config.js"></script>
+  <!-- Force SW update if stale -->
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistrations().then(regs => {
+        regs.forEach(r => r.update());
+      });
+    }
+  </script>
   <!-- Google Identity Services — loaded async, app checks readiness -->
   <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
