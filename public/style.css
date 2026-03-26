@@ -967,33 +967,60 @@ kbd {
 }
 
 .owner-chip {
+  display: flex;
+  align-items: center;
+  gap: 4px;
   background: var(--surface-3);
   border: 1px solid var(--border);
+  border-radius: 20px;
+  transition: all .15s ease;
+  overflow: hidden;
+}
+
+.owner-chip:hover {
+  border-color: var(--accent);
+  background: var(--accent-dim);
+}
+
+.owner-chip.active {
+  border-color: var(--accent);
+  background: var(--accent-dim);
+}
+
+.owner-chip__label {
   color: var(--text-dim);
   font-family: 'JetBrains Mono', monospace;
   font-size: 10px;
   font-weight: 500;
-  padding: 3px 9px;
-  border-radius: 20px;
+  padding: 3px 2px 3px 9px;
   cursor: pointer;
-  transition: all .15s ease;
   white-space: nowrap;
-  max-width: 120px;
+  max-width: 100px;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.owner-chip:hover {
-  background: var(--accent-dim);
-  border-color: var(--accent);
+.owner-chip:hover .owner-chip__label,
+.owner-chip.active .owner-chip__label {
   color: var(--accent);
-  transform: translateY(-1px);
 }
 
-.owner-chip.active {
-  background: var(--accent-dim);
-  border-color: var(--accent);
-  color: var(--accent);
+.owner-chip__del {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 9px;
+  padding: 3px 7px 3px 2px;
+  line-height: 1;
+  border-radius: 0 20px 20px 0;
+  transition: color .12s, background .12s;
+  flex-shrink: 0;
+}
+
+.owner-chip__del:hover {
+  color: var(--delete);
+  background: var(--delete-dim);
 }
 
 /* ─── PRESS RING ─────────────────────────────────────────────────────── */
