@@ -959,17 +959,11 @@ kbd {
 }
 
 /* ─── OWNER CHIPS ────────────────────────────────────────────────────── */
-.owner-chips-wrap {
-  margin-top: 6px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
 .owner-chips {
   display: flex;
   flex-wrap: wrap;
   gap: 5px;
+  margin-top: 6px;
 }
 
 .owner-chip {
@@ -981,62 +975,25 @@ kbd {
   font-weight: 500;
   padding: 4px 10px;
   border-radius: 20px;
-  cursor: grab;
+  cursor: pointer;
   transition: all .15s ease;
   white-space: nowrap;
   max-width: 130px;
   overflow: hidden;
   text-overflow: ellipsis;
-  user-select: none;
 }
 
 .owner-chip:hover {
   background: var(--accent-dim);
   border-color: var(--accent);
   color: var(--accent);
+  transform: translateY(-1px);
 }
 
 .owner-chip.active {
   background: var(--accent-dim);
   border-color: var(--accent);
   color: var(--accent);
-}
-
-.owner-chip.dragging {
-  opacity: .35;
-  cursor: grabbing;
-}
-
-/* Drop-to-delete zone */
-.owner-drop-delete {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  padding: 7px 12px;
-  border: 2px dashed var(--delete);
-  border-radius: 8px;
-  background: var(--delete-dim);
-  color: var(--delete);
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: .06em;
-  font-family: 'Oswald', sans-serif;
-  transition: all .15s ease;
-  cursor: default;
-}
-
-.owner-drop-delete.hidden { display: none; }
-
-.owner-drop-delete.over {
-  background: rgba(239,68,68,.25);
-  border-color: #ef4444;
-  transform: scale(1.02);
-}
-
-.owner-drop-delete__icon {
-  font-size: 14px;
-  font-weight: 700;
 }
 
 

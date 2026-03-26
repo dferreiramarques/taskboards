@@ -95,85 +95,61 @@ function saveOwner(name) {
   }
   refreshOwnerUI();
 }
-function removeOwner(name) {
-  const owners = loadOwners().filter(o => o !== name);
-  localStorage.setItem(LS_OWNERS, JSON.stringify(owners));
-  if (q('#input-owner').value === name) q('#input-owner').value = '';
-  refreshOwnerUI();
+function loadOwners() {
+  try { return JSON.parse(localStorage.getItem(LS_OWNERS)) || []; } catch { return []; }
+}
+function saveOwner(name) {
+  if (!name?.trim()) return;
+  const owners = loadOwners();
+  const t = name.trim();
+  if (!owners.includes(t)) {
+    owners.unshift(t);
+    if (owners.length > 30) owners.pop();
+    localStorage.setItem(LS_OWNERS, JSON.stringify(owners));
+  }
+}
+
+// Returns only owners that are actually used in at least one card across all boards
+function activeOwners() {
+  const inUse = new Set();
+  boards.forEach(b => b.cards.forEach(c => { if (c.owner?.trim()) inUse.add(c.owner.trim()); }));
+  // Also include manually saved owners that are still recent (in case no cards yet)
+  const saved = loadOwners();
+  // Merge: inUse first, then saved ones not yet in cards (for current session)
+  const merged = [...inUse];
+  saved.forEach(o => { if (!inUse.has(o)) merged.push(o); });
+  // Persist cleaned list back
+  localStorage.setItem(LS_OWNERS, JSON.stringify(merged.slice(0, 30)));
+  return merged;
 }
 
 function refreshOwnerUI() {
-  const dl    = q('#owner-datalist');
-  const chips = q('#owner-chips');
-  const owners = loadOwners();
+  const dl     = q('#owner-datalist');
+  const chips  = q('#owner-chips');
+  const owners = activeOwners();
 
-  // Update datalist for native autocomplete
   if (dl) {
     dl.innerHTML = '';
     owners.forEach(n => { const o = document.createElement('option'); o.value = n; dl.appendChild(o); });
   }
 
   if (!chips) return;
-
-  if (!owners.length) {
-    chips.style.display = 'none';
-    hideOwnerDeleteZone();
-    return;
-  }
+  if (!owners.length) { chips.style.display = 'none'; return; }
 
   chips.style.display = 'flex';
   chips.innerHTML = '';
-
   owners.slice(0, 12).forEach(name => {
-    const chip = document.createElement('div');
+    const chip = document.createElement('button');
+    chip.type = 'button';
     chip.className = 'owner-chip';
     chip.textContent = name;
-    chip.draggable = true;
-    chip.dataset.owner = name;
-
-    // Click to fill input
     chip.addEventListener('click', () => {
       q('#input-owner').value = name;
       chips.querySelectorAll('.owner-chip').forEach(c => c.classList.remove('active'));
       chip.classList.add('active');
     });
-
-    // Drag to delete
-    chip.addEventListener('dragstart', e => {
-      e.dataTransfer.setData('text/plain', name);
-      chip.classList.add('dragging');
-      showOwnerDeleteZone();
-    });
-    chip.addEventListener('dragend', () => {
-      chip.classList.remove('dragging');
-      hideOwnerDeleteZone();
-    });
-
     chips.appendChild(chip);
   });
-}
-
-function showOwnerDeleteZone() {
-  const zone = q('#owner-drop-delete');
-  if (!zone) return;
-  zone.classList.remove('hidden');
-  // Wire drop events once
-  if (zone._wired) return;
-  zone._wired = true;
-  zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('over'); });
-  zone.addEventListener('dragleave', ()  => zone.classList.remove('over'));
-  zone.addEventListener('drop', e => {
-    e.preventDefault();
-    zone.classList.remove('over');
-    const name = e.dataTransfer.getData('text/plain');
-    if (name) removeOwner(name);
-    hideOwnerDeleteZone();
-  });
-}
-
-function hideOwnerDeleteZone() {
-  const zone = q('#owner-drop-delete');
-  if (zone) { zone.classList.add('hidden'); zone.classList.remove('over'); }
 }
 
 // ─── GOOGLE DRIVE ────────────────────────────────────────────────────────────
