@@ -98,43 +98,82 @@ function saveOwner(name) {
 function removeOwner(name) {
   const owners = loadOwners().filter(o => o !== name);
   localStorage.setItem(LS_OWNERS, JSON.stringify(owners));
-  // If the deleted owner was selected, clear the input
   if (q('#input-owner').value === name) q('#input-owner').value = '';
   refreshOwnerUI();
 }
+
 function refreshOwnerUI() {
-  const dl = q('#owner-datalist'), chips = q('#owner-chips');
+  const dl    = q('#owner-datalist');
+  const chips = q('#owner-chips');
   const owners = loadOwners();
-  if (dl) { dl.innerHTML = ''; owners.forEach(n => { const o=document.createElement('option'); o.value=n; dl.appendChild(o); }); }
-  if (chips) {
-    if (!owners.length) { chips.style.display='none'; return; }
-    chips.style.display = 'flex';
-    chips.innerHTML = '';
-    owners.slice(0, 10).forEach(name => {
-      const chip = document.createElement('div');
-      chip.className = 'owner-chip';
 
-      const label = document.createElement('span');
-      label.className = 'owner-chip__label';
-      label.textContent = name;
-      label.onclick = () => {
-        q('#input-owner').value = name;
-        chips.querySelectorAll('.owner-chip').forEach(c => c.classList.remove('active'));
-        chip.classList.add('active');
-      };
-
-      const del = document.createElement('button');
-      del.type = 'button';
-      del.className = 'owner-chip__del';
-      del.textContent = '✕';
-      del.title = 'Remove owner';
-      del.onclick = e => { e.stopPropagation(); removeOwner(name); };
-
-      chip.appendChild(label);
-      chip.appendChild(del);
-      chips.appendChild(chip);
-    });
+  // Update datalist for native autocomplete
+  if (dl) {
+    dl.innerHTML = '';
+    owners.forEach(n => { const o = document.createElement('option'); o.value = n; dl.appendChild(o); });
   }
+
+  if (!chips) return;
+
+  if (!owners.length) {
+    chips.style.display = 'none';
+    hideOwnerDeleteZone();
+    return;
+  }
+
+  chips.style.display = 'flex';
+  chips.innerHTML = '';
+
+  owners.slice(0, 12).forEach(name => {
+    const chip = document.createElement('div');
+    chip.className = 'owner-chip';
+    chip.textContent = name;
+    chip.draggable = true;
+    chip.dataset.owner = name;
+
+    // Click to fill input
+    chip.addEventListener('click', () => {
+      q('#input-owner').value = name;
+      chips.querySelectorAll('.owner-chip').forEach(c => c.classList.remove('active'));
+      chip.classList.add('active');
+    });
+
+    // Drag to delete
+    chip.addEventListener('dragstart', e => {
+      e.dataTransfer.setData('text/plain', name);
+      chip.classList.add('dragging');
+      showOwnerDeleteZone();
+    });
+    chip.addEventListener('dragend', () => {
+      chip.classList.remove('dragging');
+      hideOwnerDeleteZone();
+    });
+
+    chips.appendChild(chip);
+  });
+}
+
+function showOwnerDeleteZone() {
+  const zone = q('#owner-drop-delete');
+  if (!zone) return;
+  zone.classList.remove('hidden');
+  // Wire drop events once
+  if (zone._wired) return;
+  zone._wired = true;
+  zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('over'); });
+  zone.addEventListener('dragleave', ()  => zone.classList.remove('over'));
+  zone.addEventListener('drop', e => {
+    e.preventDefault();
+    zone.classList.remove('over');
+    const name = e.dataTransfer.getData('text/plain');
+    if (name) removeOwner(name);
+    hideOwnerDeleteZone();
+  });
+}
+
+function hideOwnerDeleteZone() {
+  const zone = q('#owner-drop-delete');
+  if (zone) { zone.classList.add('hidden'); zone.classList.remove('over'); }
 }
 
 // ─── GOOGLE DRIVE ────────────────────────────────────────────────────────────

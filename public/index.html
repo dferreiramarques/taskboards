@@ -179,7 +179,13 @@
           <label class="modal__label" for="input-owner">OWNER</label>
           <input class="modal__input" id="input-owner" type="text" placeholder="Assignee name..." maxlength="40" autocomplete="off" list="owner-datalist" />
           <datalist id="owner-datalist"></datalist>
-          <div class="owner-chips" id="owner-chips"></div>
+          <div class="owner-chips-wrap">
+            <div class="owner-chips" id="owner-chips"></div>
+            <div class="owner-drop-delete hidden" id="owner-drop-delete">
+              <span class="owner-drop-delete__icon">✕</span>
+              <span class="owner-drop-delete__label">drop to remove</span>
+            </div>
+          </div>
         </div>
         <div class="modal__field">
           <label class="modal__label" for="input-date">DUE DATE</label>

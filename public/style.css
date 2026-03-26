@@ -959,74 +959,86 @@ kbd {
 }
 
 /* ─── OWNER CHIPS ────────────────────────────────────────────────────── */
+.owner-chips-wrap {
+  margin-top: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
 .owner-chips {
   display: flex;
   flex-wrap: wrap;
   gap: 5px;
-  margin-top: 6px;
 }
 
 .owner-chip {
-  display: flex;
-  align-items: center;
-  gap: 4px;
   background: var(--surface-3);
   border: 1px solid var(--border);
+  color: var(--text-dim);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  font-weight: 500;
+  padding: 4px 10px;
   border-radius: 20px;
+  cursor: grab;
   transition: all .15s ease;
+  white-space: nowrap;
+  max-width: 130px;
   overflow: hidden;
+  text-overflow: ellipsis;
+  user-select: none;
 }
 
 .owner-chip:hover {
-  border-color: var(--accent);
   background: var(--accent-dim);
-}
-
-.owner-chip.active {
   border-color: var(--accent);
-  background: var(--accent-dim);
-}
-
-.owner-chip__label {
-  color: var(--text-dim);
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 10px;
-  font-weight: 500;
-  padding: 3px 2px 3px 9px;
-  cursor: pointer;
-  white-space: nowrap;
-  max-width: 100px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.owner-chip:hover .owner-chip__label,
-.owner-chip.active .owner-chip__label {
   color: var(--accent);
 }
 
-.owner-chip__del {
-  background: none;
-  border: none;
-  border-left: 1px solid var(--border);
-  color: var(--text-dim);
-  cursor: pointer;
-  font-size: 11px;
-  font-weight: 600;
-  padding: 2px 7px;
-  line-height: 1;
-  height: 100%;
-  display: flex;
-  align-items: center;
-  transition: color .12s, background .12s;
-  flex-shrink: 0;
+.owner-chip.active {
+  background: var(--accent-dim);
+  border-color: var(--accent);
+  color: var(--accent);
 }
 
-.owner-chip__del:hover {
-  color: var(--delete);
-  background: var(--delete-dim);
-  border-left-color: var(--delete-dim);
+.owner-chip.dragging {
+  opacity: .35;
+  cursor: grabbing;
 }
+
+/* Drop-to-delete zone */
+.owner-drop-delete {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 7px 12px;
+  border: 2px dashed var(--delete);
+  border-radius: 8px;
+  background: var(--delete-dim);
+  color: var(--delete);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .06em;
+  font-family: 'Oswald', sans-serif;
+  transition: all .15s ease;
+  cursor: default;
+}
+
+.owner-drop-delete.hidden { display: none; }
+
+.owner-drop-delete.over {
+  background: rgba(239,68,68,.25);
+  border-color: #ef4444;
+  transform: scale(1.02);
+}
+
+.owner-drop-delete__icon {
+  font-size: 14px;
+  font-weight: 700;
+}
+
 
 /* ─── PRESS RING ─────────────────────────────────────────────────────── */
 .press-ring {
