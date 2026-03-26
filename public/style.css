@@ -1270,7 +1270,7 @@ body.dragging-active .card:not(.dragging-source) { pointer-events: none; }
 
 .user-pill__menu {
   position: absolute;
-  top: calc(100% + 6px);
+  top: calc(100% + 8px);
   right: 0;
   left: auto;
   min-width: 180px;
@@ -1284,7 +1284,7 @@ body.dragging-active .card:not(.dragging-source) { pointer-events: none; }
   animation: slide-up .15s ease;
 }
 
-.user-pill:hover .user-pill__menu { display: block; }
+.user-pill.open .user-pill__menu { display: block; }
 
 .user-pill__menu-email {
   padding: 4px 14px 8px;

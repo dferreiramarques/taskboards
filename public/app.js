@@ -357,7 +357,6 @@ function initGSI() {
 
   q('#login-btn').addEventListener('click', () => {
     if (!tokenClient) return;
-    // Use 'select_account' so users can choose account without forced re-consent
     tokenClient.requestAccessToken({ prompt: 'select_account' });
   });
 }
@@ -366,6 +365,15 @@ async function handleTokenResponse(resp) {
   if (resp.error) { console.error('GSI error:', resp.error); return; }
   gAccessToken = resp.access_token;
   console.log('GSI token received, scopes:', resp.scope);
+
+  // Check if Drive scope was actually granted
+  const hasDriveScope = resp.scope?.includes('drive.appdata') || resp.scope?.includes('drive');
+  if (!hasDriveScope) {
+    console.warn('Drive scope missing — requesting consent again');
+    // Force full consent to get the Drive scope
+    tokenClient.requestAccessToken({ prompt: 'consent' });
+    return;
+  }
 
   // Fetch user profile
   try {
@@ -382,12 +390,10 @@ async function handleTokenResponse(resp) {
     console.log('Restoring', driveData.boards.length, 'boards from Drive');
     boards = driveData.boards;
     currentBoardId = driveData.currentBoardId || boards[0].id;
-    // Make sure currentBoardId is valid
     if (!boards.find(b => b.id === currentBoardId)) currentBoardId = boards[0].id;
     saveToLocal();
   } else {
     console.log('No Drive data found — saving current local boards to Drive');
-    // First time: push local boards to Drive so they're backed up
     await driveSaveData();
   }
 
@@ -405,6 +411,16 @@ function showUserPill() {
   q('#user-email-menu').textContent = gUser.email || '';
 }
 
+function openUserMenu()  { q('#user-pill').classList.add('open'); }
+function closeUserMenu() { q('#user-pill').classList.remove('open'); }
+function toggleUserMenu(e) { e.stopPropagation(); q('#user-pill').classList.toggle('open'); }
+
+// Click on pill to open menu; click outside to close
+q('#user-pill').addEventListener('click', toggleUserMenu);
+document.addEventListener('click', e => {
+  if (!e.target.closest('#user-pill')) closeUserMenu();
+});
+
 function handleLogout() {
   if (gAccessToken && window.google?.accounts?.oauth2) {
     google.accounts.oauth2.revoke(gAccessToken, () => {});
@@ -414,9 +430,23 @@ function handleLogout() {
   driveFileId = null;
   lsDel(LS_DRIVE_FID);
 
+  // Clear boards from local storage so next user starts clean
+  lsDel(LS_BOARDS);
+  lsDel(LS_CURRENT);
+  boards = [defaultBoard()];
+  currentBoardId = boards[0].id;
+  archiveExpanded = false;
+  doneExpanded = false;
+  q('#archive-bar').classList.remove('expanded');
+  q('#done-bar').classList.remove('expanded');
+  tabPage = 0;
+
+  closeUserMenu();
   q('#user-pill').classList.add('hidden');
   q('#login-btn').style.display = '';
   setSyncStatus('', 'Offline');
+  renderTabs();
+  renderBoard();
 }
 
 q('#logout-btn')?.addEventListener('click', handleLogout);
