@@ -17,5 +17,5 @@
 //  4. Paste the Client ID below and deploy. Done.
 //
 window.TASKBOARDS_CONFIG = {
-  GOOGLE_CLIENT_ID: '56980482877-s9ueo6802dlvbf88qqkic21rddgmj0ic.apps.googleusercontent.com'   // ← paste your Client ID here, e.g. '123456.apps.googleusercontent.com'
+  GOOGLE_CLIENT_ID: ''   // ← paste your Client ID here, e.g. '123456.apps.googleusercontent.com'
 };

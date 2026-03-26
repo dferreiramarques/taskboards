@@ -109,32 +109,126 @@ function refreshOwnerUI() {
 }
 
 // ─── GOOGLE DRIVE ────────────────────────────────────────────────────────────
-function driveHeaders() {
-  return { 'Authorization': `Bearer ${gAccessToken}`, 'Content-Type': 'application/json' };
+function driveHeaders(contentType = 'application/json') {
+  return { 'Authorization': `Bearer ${gAccessToken}`, 'Content-Type': contentType };
 }
 
 async function driveFindFile() {
-  const r = await fetch(`${DRIVE_API}/files?spaces=${DRIVE_FOLDER}&fields=files(id,name)&q=name='${DRIVE_FILENAME}'`, { headers: driveHeaders() });
+  // Search by name in appDataFolder
+  const url = `${DRIVE_API}/files?spaces=${DRIVE_FOLDER}&fields=files(id,name,modifiedTime)&q=name%3D'${DRIVE_FILENAME}'`;
+  const r   = await fetch(url, { headers: driveHeaders() });
+  if (!r.ok) {
+    const err = await r.json().catch(() => ({}));
+    console.error('driveFindFile failed:', r.status, err?.error?.message);
+    return null;
+  }
   const data = await r.json();
-  return data.files?.[0]?.id || null;
+  console.log('driveFindFile results:', data.files);
+  // If multiple copies somehow exist, take the most recently modified
+  if (!data.files?.length) return null;
+  return data.files.sort((a, b) => new Date(b.modifiedTime) - new Date(a.modifiedTime))[0].id;
 }
 
 async function driveLoadData() {
-  setSyncStatus('syncing', 'Syncing…');
+  setSyncStatus('syncing', 'Loading from Drive…');
   try {
-    let fid = driveFileId || await driveFindFile();
-    if (!fid) { setSyncStatus('synced', 'Drive ready'); return null; }
+    const fid = driveFileId || await driveFindFile();
+    if (!fid) {
+      console.log('driveLoadData: no file found in Drive yet');
+      setSyncStatus('synced', 'Drive ready');
+      return null;
+    }
     driveFileId = fid;
     localStorage.setItem(LS_DRIVE_FID, fid);
-    const r = await fetch(`${DRIVE_API}/files/${fid}?alt=media`, { headers: driveHeaders() });
-    if (!r.ok) throw new Error('fetch failed');
+
+    const r = await fetch(`${DRIVE_API}/files/${fid}?alt=media`, { headers: { 'Authorization': `Bearer ${gAccessToken}` } });
+    if (!r.ok) {
+      const text = await r.text().catch(() => '');
+      console.error('driveLoadData fetch failed:', r.status, text);
+      // 404 = file was deleted from Drive, clear cached ID
+      if (r.status === 404) { driveFileId = null; localStorage.removeItem(LS_DRIVE_FID); }
+      throw new Error(`HTTP ${r.status}`);
+    }
+
     const data = await r.json();
-    setSyncStatus('synced', 'Synced');
+    console.log('driveLoadData success — boards:', data.boards?.length, 'savedAt:', new Date(data.savedAt).toLocaleString());
+    setSyncStatus('synced', 'Loaded from Drive ✓');
     return data;
   } catch (err) {
-    console.warn('Drive load error:', err);
-    setSyncStatus('error', 'Sync error');
+    console.error('driveLoadData error:', err.message);
+    setSyncStatus('error', `Load failed — ${err.message}`);
     return null;
+  }
+}
+
+async function driveSaveData() {
+  if (!gAccessToken) return;
+  setSyncStatus('syncing', 'Saving…');
+  const payload = JSON.stringify({ boards, currentBoardId, savedAt: Date.now() });
+
+  try {
+    let fid = driveFileId || await driveFindFile();
+    let r;
+
+    if (fid) {
+      // Update existing file
+      r = await fetch(`${DRIVE_UPLOAD_API}/files/${fid}?uploadType=media`, {
+        method: 'PATCH',
+        headers: { 'Authorization': `Bearer ${gAccessToken}`, 'Content-Type': 'application/json' },
+        body: payload
+      });
+      if (r.status === 404) {
+        // File was deleted from Drive — clear ID and create fresh
+        console.warn('Drive file 404 on update, recreating…');
+        driveFileId = null; fid = null;
+        localStorage.removeItem(LS_DRIVE_FID);
+      }
+    }
+
+    if (!fid) {
+      // Create new file in appDataFolder
+      const boundary = 'tb_' + Date.now();
+      const body = [
+        `--${boundary}`,
+        'Content-Type: application/json; charset=UTF-8',
+        '',
+        JSON.stringify({ name: DRIVE_FILENAME, parents: [DRIVE_FOLDER] }),
+        `--${boundary}`,
+        'Content-Type: application/json',
+        '',
+        payload,
+        `--${boundary}--`
+      ].join('\r\n');
+
+      r = await fetch(`${DRIVE_UPLOAD_API}/files?uploadType=multipart&fields=id`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${gAccessToken}`, 'Content-Type': `multipart/related; boundary=${boundary}` },
+        body
+      });
+
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({}));
+        throw new Error(`create ${r.status}: ${err?.error?.message || r.statusText}`);
+      }
+      const res = await r.json();
+      if (!res.id) throw new Error('No file ID in create response');
+      driveFileId = res.id;
+      localStorage.setItem(LS_DRIVE_FID, driveFileId);
+      console.log('driveCreate success, id:', driveFileId);
+      setSyncStatus('synced', 'Saved to Drive ✓');
+      return;
+    }
+
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}));
+      throw new Error(`update ${r.status}: ${err?.error?.message || r.statusText}`);
+    }
+
+    console.log('driveSave success');
+    setSyncStatus('synced', 'Saved to Drive ✓');
+  } catch (err) {
+    console.error('driveSaveData error:', err.message);
+    setSyncStatus('error', `Save failed — ${err.message}`);
   }
 }
 
@@ -145,32 +239,70 @@ async function driveSaveData() {
   try {
     let fid = driveFileId || await driveFindFile();
     let r;
+
     if (fid) {
+      // Update existing file — simple media upload
       r = await fetch(`${DRIVE_UPLOAD_API}/files/${fid}?uploadType=media`, {
         method: 'PATCH',
         headers: { 'Authorization': `Bearer ${gAccessToken}`, 'Content-Type': 'application/json' },
         body: payload
       });
     } else {
-      // Create new file
-      const meta = { name: DRIVE_FILENAME, parents: [DRIVE_FOLDER] };
-      const form = new FormData();
-      form.append('metadata', new Blob([JSON.stringify(meta)], {type:'application/json'}));
-      form.append('file', new Blob([payload], {type:'application/json'}));
+      // Create new file in appDataFolder — use multipart with correct boundary
+      const boundary = 'taskboards_boundary_' + Date.now();
+      const body = [
+        `--${boundary}`,
+        'Content-Type: application/json; charset=UTF-8',
+        '',
+        JSON.stringify({ name: DRIVE_FILENAME, parents: [DRIVE_FOLDER] }),
+        `--${boundary}`,
+        'Content-Type: application/json',
+        '',
+        payload,
+        `--${boundary}--`
+      ].join('\r\n');
+
       r = await fetch(`${DRIVE_UPLOAD_API}/files?uploadType=multipart&fields=id`, {
         method: 'POST',
-        headers: { 'Authorization': `Bearer ${gAccessToken}` },
-        body: form
+        headers: {
+          'Authorization': `Bearer ${gAccessToken}`,
+          'Content-Type': `multipart/related; boundary=${boundary}`
+        },
+        body
       });
+
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({}));
+        console.error('Drive create failed:', r.status, err);
+        throw new Error(`create ${r.status}: ${err?.error?.message || r.statusText}`);
+      }
+
       const res = await r.json();
+      if (!res.id) throw new Error('No file ID returned');
       driveFileId = res.id;
       localStorage.setItem(LS_DRIVE_FID, driveFileId);
+      setSyncStatus('synced', 'Saved to Drive ✓');
+      return;
     }
-    if (r.ok) setSyncStatus('synced', 'Saved to Drive');
-    else throw new Error('save failed');
+
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}));
+      console.error('Drive save failed:', r.status, err);
+      // If 404 (file deleted from Drive), clear cached ID and retry once
+      if (r.status === 404) {
+        driveFileId = null;
+        localStorage.removeItem(LS_DRIVE_FID);
+        console.warn('Drive file gone, will recreate on next save');
+        scheduleDriveSave();
+        return;
+      }
+      throw new Error(`save ${r.status}: ${err?.error?.message || r.statusText}`);
+    }
+
+    setSyncStatus('synced', 'Saved to Drive ✓');
   } catch (err) {
-    console.warn('Drive save error:', err);
-    setSyncStatus('error', 'Save failed');
+    console.error('Drive save error:', err.message);
+    setSyncStatus('error', `Save failed — ${err.message}`);
   }
 }
 
@@ -212,30 +344,40 @@ function initGSI() {
 
   q('#login-btn').addEventListener('click', () => {
     if (!tokenClient) return;
-    tokenClient.requestAccessToken({ prompt: 'consent' });
+    // Use 'select_account' so users can choose account without forced re-consent
+    tokenClient.requestAccessToken({ prompt: 'select_account' });
   });
 }
 
 async function handleTokenResponse(resp) {
   if (resp.error) { console.error('GSI error:', resp.error); return; }
   gAccessToken = resp.access_token;
+  console.log('GSI token received, scopes:', resp.scope);
 
   // Fetch user profile
   try {
     const r = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', { headers: { Authorization: `Bearer ${gAccessToken}` } });
     gUser = await r.json();
-  } catch {}
+    console.log('Logged in as:', gUser.email);
+  } catch (e) { console.warn('userinfo failed', e); }
 
   showUserPill();
-  setSyncStatus('syncing', 'Loading…');
 
-  // Load boards from Drive (merge with local if first time)
+  // Always try to load from Drive — Drive is the source of truth when logged in
   const driveData = await driveLoadData();
   if (driveData?.boards?.length) {
+    console.log('Restoring', driveData.boards.length, 'boards from Drive');
     boards = driveData.boards;
     currentBoardId = driveData.currentBoardId || boards[0].id;
+    // Make sure currentBoardId is valid
+    if (!boards.find(b => b.id === currentBoardId)) currentBoardId = boards[0].id;
+    saveToLocal();
+  } else {
+    console.log('No Drive data found — saving current local boards to Drive');
+    // First time: push local boards to Drive so they're backed up
+    await driveSaveData();
   }
-  saveToLocal();
+
   renderTabs();
   renderBoard();
 }
