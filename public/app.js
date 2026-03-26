@@ -14,6 +14,14 @@ const LS_THEME     = 'taskboards-theme';
 const LS_OWNERS    = 'taskboards-owners';
 const LS_DRIVE_FID = 'taskboards-drive-fileid';
 
+// Safe localStorage read — treats "null"/"undefined" as missing
+function lsGet(key) {
+  const v = localStorage.getItem(key);
+  return (v === null || v === 'null' || v === 'undefined') ? null : v;
+}
+function lsSet(key, val) { localStorage.setItem(key, val); }
+function lsDel(key)      { localStorage.removeItem(key); }
+
 const TABS_PER_PAGE   = 4;
 const DRAG_THRESHOLD  = 8;
 const LONG_PRESS_MS   = 2000;
@@ -33,7 +41,7 @@ let deleteCardId    = null;
 // Auth state
 let gAccessToken   = null;
 let gUser          = null;     // {name, email, picture}
-let driveFileId    = localStorage.getItem(LS_DRIVE_FID) || null;
+let driveFileId    = lsGet(LS_DRIVE_FID);
 let saveTimer      = null;
 let tokenClient    = null;
 
@@ -139,14 +147,14 @@ async function driveLoadData() {
       return null;
     }
     driveFileId = fid;
-    localStorage.setItem(LS_DRIVE_FID, fid);
+    lsSet(LS_DRIVE_FID, fid);
 
     const r = await fetch(`${DRIVE_API}/files/${fid}?alt=media`, { headers: { 'Authorization': `Bearer ${gAccessToken}` } });
     if (!r.ok) {
       const text = await r.text().catch(() => '');
       console.error('driveLoadData fetch failed:', r.status, text);
       // 404 = file was deleted from Drive, clear cached ID
-      if (r.status === 404) { driveFileId = null; localStorage.removeItem(LS_DRIVE_FID); }
+      if (r.status === 404) { driveFileId = null; lsDel(LS_DRIVE_FID); }
       throw new Error(`HTTP ${r.status}`);
     }
 
@@ -181,7 +189,7 @@ async function driveSaveData() {
         // File was deleted from Drive — clear ID and create fresh
         console.warn('Drive file 404 on update, recreating…');
         driveFileId = null; fid = null;
-        localStorage.removeItem(LS_DRIVE_FID);
+        lsDel(LS_DRIVE_FID);
       }
     }
 
@@ -213,7 +221,7 @@ async function driveSaveData() {
       const res = await r.json();
       if (!res.id) throw new Error('No file ID in create response');
       driveFileId = res.id;
-      localStorage.setItem(LS_DRIVE_FID, driveFileId);
+      lsSet(LS_DRIVE_FID, driveFileId);
       console.log('driveCreate success, id:', driveFileId);
       setSyncStatus('synced', 'Saved to Drive ✓');
       return;
@@ -280,7 +288,7 @@ async function driveSaveData() {
       const res = await r.json();
       if (!res.id) throw new Error('No file ID returned');
       driveFileId = res.id;
-      localStorage.setItem(LS_DRIVE_FID, driveFileId);
+      lsSet(LS_DRIVE_FID, driveFileId);
       setSyncStatus('synced', 'Saved to Drive ✓');
       return;
     }
@@ -291,7 +299,7 @@ async function driveSaveData() {
       // If 404 (file deleted from Drive), clear cached ID and retry once
       if (r.status === 404) {
         driveFileId = null;
-        localStorage.removeItem(LS_DRIVE_FID);
+        lsDel(LS_DRIVE_FID);
         console.warn('Drive file gone, will recreate on next save');
         scheduleDriveSave();
         return;
@@ -399,7 +407,7 @@ function handleLogout() {
   gAccessToken = null;
   gUser = null;
   driveFileId = null;
-  localStorage.removeItem(LS_DRIVE_FID);
+  lsDel(LS_DRIVE_FID);
 
   q('#user-pill').classList.add('hidden');
   q('#login-btn').style.display = '';
