@@ -95,6 +95,13 @@ function saveOwner(name) {
   }
   refreshOwnerUI();
 }
+function removeOwner(name) {
+  const owners = loadOwners().filter(o => o !== name);
+  localStorage.setItem(LS_OWNERS, JSON.stringify(owners));
+  // If the deleted owner was selected, clear the input
+  if (q('#input-owner').value === name) q('#input-owner').value = '';
+  refreshOwnerUI();
+}
 function refreshOwnerUI() {
   const dl = q('#owner-datalist'), chips = q('#owner-chips');
   const owners = loadOwners();
@@ -103,14 +110,28 @@ function refreshOwnerUI() {
     if (!owners.length) { chips.style.display='none'; return; }
     chips.style.display = 'flex';
     chips.innerHTML = '';
-    owners.slice(0,6).forEach(name => {
-      const chip = document.createElement('button');
-      chip.type='button'; chip.className='owner-chip'; chip.textContent=name;
-      chip.onclick = () => {
+    owners.slice(0, 10).forEach(name => {
+      const chip = document.createElement('div');
+      chip.className = 'owner-chip';
+
+      const label = document.createElement('span');
+      label.className = 'owner-chip__label';
+      label.textContent = name;
+      label.onclick = () => {
         q('#input-owner').value = name;
-        chips.querySelectorAll('.owner-chip').forEach(c=>c.classList.remove('active'));
+        chips.querySelectorAll('.owner-chip').forEach(c => c.classList.remove('active'));
         chip.classList.add('active');
       };
+
+      const del = document.createElement('button');
+      del.type = 'button';
+      del.className = 'owner-chip__del';
+      del.textContent = '✕';
+      del.title = 'Remove owner';
+      del.onclick = e => { e.stopPropagation(); removeOwner(name); };
+
+      chip.appendChild(label);
+      chip.appendChild(del);
       chips.appendChild(chip);
     });
   }
