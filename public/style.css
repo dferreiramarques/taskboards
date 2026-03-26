@@ -637,10 +637,12 @@ body.dragging-active .shelf--done    .drop-overlay { display: flex; }
   padding: 2px 7px;
   border-radius: 4px;
   border: 1px solid rgba(240,192,64,.18);
-  max-width: 55%;
+  max-width: 72%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  flex-shrink: 1;
+  min-width: 0;
 }
 
 .card__date       { font-size: 10px; color: var(--text-dim); letter-spacing: .03em; }
@@ -788,7 +790,25 @@ body.dragging-active .shelf--done    .drop-overlay { display: flex; }
   transition: background .35s ease, border-color .35s ease;
 }
 
-.modal--help { max-width: 460px; }
+.modal--help {
+  max-width: 460px;
+  max-height: 88dvh;
+  display: flex;
+  flex-direction: column;
+}
+
+.modal--help .modal__header {
+  flex-shrink: 0;
+}
+
+.help__body {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+  padding: 18px;
+}
 
 @keyframes slide-up {
   from { opacity: 0; transform: translateY(20px) scale(.97); }
@@ -902,7 +922,6 @@ input[type="date"].modal__input::-webkit-calendar-picker-indicator:hover {
 .modal__submit:active { transform: translateY(0); filter: brightness(.95); }
 
 /* ─── HELP MODAL SPECIFIC ────────────────────────────────────────────── */
-.help__body { padding: 18px; }
 
 .help__section { display: flex; flex-direction: column; gap: 14px; }
 
@@ -1081,9 +1100,9 @@ body.dragging-active .card:not(.dragging-source) { pointer-events: none; }
   padding: 0 10px;
   height: 26px;
   border-radius: 6px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--tab-color, var(--border));
   background: var(--surface-2);
-  color: var(--text-dim);
+  color: var(--tab-color, var(--text-dim));
   font-family: 'JetBrains Mono', monospace;
   font-size: 11px;
   font-weight: 500;
@@ -1098,15 +1117,15 @@ body.dragging-active .card:not(.dragging-source) { pointer-events: none; }
 }
 
 .board-tab:hover {
-  background: var(--surface-3);
-  color: var(--text);
-  border-color: var(--border-light);
+  background: color-mix(in srgb, var(--tab-color, var(--border)) 12%, transparent);
+  color: var(--tab-color, var(--text));
+  border-color: var(--tab-color, var(--border-light));
 }
 
 .board-tab.active {
-  background: var(--accent-dim);
-  border-color: var(--accent);
-  color: var(--accent);
+  background: color-mix(in srgb, var(--tab-color, var(--accent)) 18%, transparent);
+  border-color: var(--tab-color, var(--accent));
+  color: var(--tab-color, var(--accent));
   font-weight: 600;
 }
 

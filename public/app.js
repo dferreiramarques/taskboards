@@ -568,6 +568,34 @@ function moveCard(id, newStatus) {
 }
 
 // ─── RENDER: TABS ─────────────────────────────────────────────────────────────
+// PICO-8 palette — vivid, distinct, works on dark & light
+const PICO8 = [
+  '#ff004d', // red
+  '#ffa300', // orange
+  '#ffec27', // yellow
+  '#00e436', // green
+  '#29adff', // blue
+  '#83769c', // lavender
+  '#ff77a8', // pink
+  '#ffccaa', // peach
+  '#00b543', // dark green
+  '#1d2b53', // dark navy  — skip on dark, use on light
+  '#7e2553', // dark purple
+  '#008751', // forest
+  '#ab5236', // brown
+  '#5f574f', // dark grey
+  '#c2c3c7', // light grey
+  '#fff1e8', // cream — skip, too light
+];
+const TAB_COLORS = ['#ff004d','#ffa300','#00e436','#29adff','#83769c','#ff77a8','#ffccaa','#ab5236','#00b543','#7e2553','#008751','#c2c3c7'];
+
+function tabColor(boardId) {
+  // Stable color per board based on its id
+  let hash = 0;
+  for (let i = 0; i < boardId.length; i++) hash = (hash * 31 + boardId.charCodeAt(i)) >>> 0;
+  return TAB_COLORS[hash % TAB_COLORS.length];
+}
+
 function renderTabs() {
   const container = q('#boards-tabs');
   const prevBtn   = q('#tab-prev');
@@ -584,6 +612,7 @@ function renderTabs() {
     const tab = document.createElement('div');
     tab.className = 'board-tab' + (board.id === currentBoardId ? ' active' : '');
     tab.dataset.id = board.id;
+    tab.style.setProperty('--tab-color', tabColor(board.id));
     tab.innerHTML = `
       <span class="board-tab__name">${esc(board.name)}</span>
       ${boards.length > 1 ? `<button class="board-tab__delete" title="Delete board">✕</button>` : ''}
