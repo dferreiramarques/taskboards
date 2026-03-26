@@ -1,43 +1,45 @@
 # Taskboards PWA
 
-Task management board with Archive, ToDo, InProgress, and Done zones.
+Multi-board task manager with Google SSO and Drive sync.
 
-## Features
+## How the Google login works
 
-- **Archive bar** (top) — drag cards to archive; click to expand/collapse
-- **ToDo & InProgress columns** (center) — card view with title, owner, due date
-- **Done bar** (bottom) — drag completed cards here; click to expand/collapse
-- **Drag & drop** between all zones (mouse and touch)
-- **Long press 2s** on a card to activate delete mode (red ✕ button appears)
-- **Floating + button** to create new cards
-- **Color-coded dates** — red = overdue, orange = due in ≤3 days
-- **PWA** — installable on mobile and desktop, works offline
-- **localStorage** — data persists across sessions
+- The **Client ID** identifies this *app* to Google — it is **not a secret** and not per-user.
+- Each user signs in with their **own Google account**.
+- Each user's boards are saved to **their own Google Drive** (in a private app folder invisible to others).
+- You set the Client ID once, commit it, and everyone can use it.
 
-## Keyboard Shortcuts
+## One-time setup: Google OAuth
 
-| Key         | Action          |
-|-------------|-----------------|
-| `Ctrl+Enter` | New card       |
-| `Escape`    | Close modal / cancel delete |
+1. Go to [console.cloud.google.com](https://console.cloud.google.com) → create a project
+2. **APIs & Services → Library** → enable **Google Drive API**
+3. **APIs & Services → Credentials → Create Credentials → OAuth 2.0 Client ID**
+   - Type: **Web application**
+   - Authorized JavaScript origins:
+     ```
+     https://your-app.railway.app
+     http://localhost:3000
+     ```
+4. Copy the **Client ID**
+5. Open `public/config.js` and paste it:
+   ```js
+   GOOGLE_CLIENT_ID: '123456789.apps.googleusercontent.com'
+   ```
+6. Commit and push → Railway redeploys → done ✓
 
-## Deploy to Render.com
+## Deploy on Railway
 
-1. Push this repo to GitHub
-2. Go to [render.com](https://render.com) → **New Web Service**
-3. Connect your GitHub repo
-4. Render will auto-detect `render.yaml` and configure everything
-5. Click **Deploy**
+1. Push repo to GitHub
+2. [railway.app](https://railway.app) → New Project → Deploy from GitHub repo
+3. No environment variables needed — Client ID is in `config.js`
 
-Or manually:
-- **Build command:** `npm install`
-- **Start command:** `npm start`
-- **Node version:** 18+
-
-## Local Development
+## Local development
 
 ```bash
 npm install
 npm start
 # open http://localhost:3000
 ```
+
+> Google SSO requires the page to be served (not `file://`).
+> With `npm start` on localhost it works fine.

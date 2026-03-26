@@ -1,22 +1,21 @@
-// ─────────────────────────────────────────────────────────────────────────────
-// TASKBOARDS CONFIG — Edit this file before deploying
-// ─────────────────────────────────────────────────────────────────────────────
+// ─── TASKBOARDS — Google OAuth App Registration ───────────────────────────────
 //
-// To enable Google SSO + Drive sync:
+// This Client ID identifies THIS APP to Google — it is NOT a secret and
+// is safe to be public/committed to git.
 //
-//  1. Go to https://console.cloud.google.com
-//  2. Create a project (or use an existing one)
-//  3. Enable "Google Drive API" in APIs & Services → Library
-//  4. Go to APIs & Services → Credentials → Create Credentials → OAuth client ID
-//  5. Application type: Web application
-//  6. Authorized JavaScript origins:
-//       http://localhost:3000          (for local dev)
-//       https://YOUR-APP.onrender.com  (for production)
-//  7. Authorized redirect URIs: same as above
-//  8. Copy the Client ID below
+// Every user signs in with their OWN Google account.
+// Each user's boards are saved to THEIR OWN Google Drive (private appDataFolder).
 //
-// Leave as empty string '' to run in offline/localStorage-only mode.
+// SETUP (one-time, done by the app developer):
+//  1. console.cloud.google.com → New Project
+//  2. APIs & Services → Library → enable "Google Drive API"
+//  3. APIs & Services → Credentials → Create OAuth 2.0 Client ID
+//     Type: Web application
+//     Authorized JavaScript origins:
+//       https://your-app.railway.app
+//       http://localhost:3000
+//  4. Paste the Client ID below and deploy. Done.
 //
 window.TASKBOARDS_CONFIG = {
-  GOOGLE_CLIENT_ID: ''
+  GOOGLE_CLIENT_ID: '56980482877-s9ueo6802dlvbf88qqkic21rddgmj0ic.apps.googleusercontent.com'   // ← paste your Client ID here, e.g. '123456.apps.googleusercontent.com'
 };
