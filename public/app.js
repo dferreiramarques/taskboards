@@ -22,7 +22,6 @@ function lsGet(key) {
 function lsSet(key, val) { localStorage.setItem(key, val); }
 function lsDel(key)      { localStorage.removeItem(key); }
 
-const TABS_PER_PAGE   = 4;
 const DRAG_THRESHOLD  = 8;
 const LONG_PRESS_MS   = 2000;
 const SAVE_DEBOUNCE   = 1800;  // ms after last change before Drive save
@@ -31,12 +30,14 @@ const SAVE_DEBOUNCE   = 1800;  // ms after last change before Drive save
 let boards         = [];       // [{id, name, cards:[]}]
 let currentBoardId = null;
 let tabPage        = 0;
+let dynamicTabsPerPage = 4;   // computed dynamically based on available width
 let archiveExpanded = false;
 let doneExpanded    = false;
 let selectedColumn  = 'todo';
-let dragState       = null;
+let dragState       = null;   // extended: { cardId, startX, startY, dragging, sourceEl, currentZone, insertBefore }
 let longPressTimer  = null;
 let deleteCardId    = null;
+let dropIndicator   = null;   // the insertion line element
 
 // Auth state
 let gAccessToken   = null;
@@ -495,7 +496,7 @@ function addBoard() {
   boards.push(b);
   currentBoardId = b.id;
   // Go to last tab page to show new board
-  tabPage = Math.floor((boards.length - 1) / TABS_PER_PAGE);
+  tabPage = Math.floor((boards.length - 1) / dynamicTabsPerPage);
   onDataChanged();
   renderTabs();
   renderBoard();
@@ -505,7 +506,7 @@ function deleteBoard(id) {
   if (boards.length <= 1) return;
   boards = boards.filter(b => b.id !== id);
   if (currentBoardId === id) currentBoardId = boards[Math.max(0, boards.length-1)].id;
-  tabPage = Math.min(tabPage, Math.floor((boards.length-1)/TABS_PER_PAGE));
+  tabPage = Math.min(tabPage, Math.floor((boards.length-1)/dynamicTabsPerPage));
   onDataChanged();
   renderTabs();
   renderBoard();
@@ -530,7 +531,9 @@ function renameBoard(id, name) {
 
 // ─── CARD CRUD ────────────────────────────────────────────────────────────────
 function createCard(title, owner, dueDate, status) {
-  const card = { id: uid(), title: title.trim(), owner: owner.trim(), dueDate, status, createdAt: Date.now() };
+  const zoneCards = currentBoard().cards.filter(c => c.status === status);
+  const maxOrder  = zoneCards.reduce((m, c) => Math.max(m, c.sortOrder ?? c.createdAt), -1);
+  const card = { id: uid(), title: title.trim(), owner: owner.trim(), dueDate, status, createdAt: Date.now(), sortOrder: maxOrder + 1 };
   currentBoard().cards.push(card);
   onDataChanged();
   renderBoard();
@@ -558,13 +561,37 @@ function deleteCard(id) {
 }
 
 function moveCard(id, newStatus) {
+  moveOrReorderCard(id, newStatus, null);
+}
+
+function moveOrReorderCard(id, newStatus, insertBeforeId) {
   const cb = currentBoard();
   const card = cb?.cards.find(c => c.id === id);
-  if (!card || card.status === newStatus) return;
+  if (!card) return;
+  const wasStatus = card.status;
+
+  // Update status
   card.status = newStatus;
+
+  // Build ordered list for the target zone (exclude the dragged card)
+  const zoneCards = cb.cards
+    .filter(c => c.status === newStatus && c.id !== id)
+    .sort((a, b) => (a.sortOrder ?? a.createdAt) - (b.sortOrder ?? b.createdAt));
+
+  // Find insertion index
+  let insertIdx = zoneCards.length; // default: end
+  if (insertBeforeId) {
+    const idx = zoneCards.findIndex(c => c.id === insertBeforeId);
+    if (idx >= 0) insertIdx = idx;
+  }
+
+  // Insert card at position and reassign sortOrder
+  zoneCards.splice(insertIdx, 0, card);
+  zoneCards.forEach((c, i) => { c.sortOrder = i; });
+
   onDataChanged();
   renderBoard();
-  if (newStatus === 'done') setTimeout(launchConfetti, 80);
+  if (newStatus === 'done' && wasStatus !== 'done') setTimeout(launchConfetti, 80);
 }
 
 // ─── RENDER: TABS ─────────────────────────────────────────────────────────────
@@ -596,17 +623,58 @@ function tabColor(boardId) {
   return TAB_COLORS[hash % TAB_COLORS.length];
 }
 
+/**
+ * Compute how many tabs fit in the available width by doing a hidden probe render.
+ * Returns the count that fits starting from the current tabPage * current dynamicTabsPerPage.
+ */
+function computeTabsPerPage() {
+  const container  = q('#boards-tabs');
+  const prevBtn    = q('#tab-prev');
+  const nextBtn    = q('#tab-next');
+  const addBtn     = q('#add-board');
+  if (!container) return 4;
+
+  // Available width = full row width minus fixed-width controls + some margin
+  const rowWidth   = container.parentElement?.clientWidth || window.innerWidth;
+  const btnW       = (prevBtn?.offsetWidth || 28) + (nextBtn?.offsetWidth || 28) + (addBtn?.offsetWidth || 36);
+  const availW     = rowWidth - btnW - 24; // 24px for gaps/padding
+
+  if (availW <= 60) return 1;
+
+  // Probe: render all boards in a hidden off-screen flex row to measure real widths
+  const probe = document.createElement('div');
+  probe.style.cssText = 'position:fixed;top:-9999px;left:0;display:flex;gap:4px;visibility:hidden;pointer-events:none;';
+  document.body.appendChild(probe);
+
+  let totalW = 0, count = 0;
+  for (const board of boards) {
+    const t = document.createElement('div');
+    t.className = 'board-tab';
+    t.style.cssText = 'flex-shrink:0;white-space:nowrap;';
+    t.innerHTML = `<span class="board-tab__name">${esc(board.name)}</span>${boards.length > 1 ? '<button class="board-tab__delete" style="pointer-events:none">✕</button>' : ''}`;
+    probe.appendChild(t);
+    totalW += t.getBoundingClientRect().width + 4;
+    if (totalW <= availW) count++;
+    else break;
+  }
+
+  document.body.removeChild(probe);
+  return Math.max(1, count);
+}
+
 function renderTabs() {
   const container = q('#boards-tabs');
   const prevBtn   = q('#tab-prev');
   const nextBtn   = q('#tab-next');
   container.innerHTML = '';
 
-  const totalPages = Math.ceil(boards.length / TABS_PER_PAGE);
+  dynamicTabsPerPage = computeTabsPerPage();
+
+  const totalPages = Math.ceil(boards.length / dynamicTabsPerPage);
   tabPage = Math.max(0, Math.min(tabPage, totalPages - 1));
 
-  const start = tabPage * TABS_PER_PAGE;
-  const slice = boards.slice(start, start + TABS_PER_PAGE);
+  const start = tabPage * dynamicTabsPerPage;
+  const slice = boards.slice(start, start + dynamicTabsPerPage);
 
   slice.forEach(board => {
     const tab = document.createElement('div');
@@ -641,10 +709,12 @@ function renderTabs() {
     container.appendChild(tab);
   });
 
+  // Show prev/next only when there are multiple pages
+  const multiPage = totalPages > 1;
   prevBtn.disabled = tabPage === 0;
   nextBtn.disabled = tabPage >= totalPages - 1;
-  prevBtn.style.visibility = totalPages > 1 ? '' : 'hidden';
-  nextBtn.style.visibility = totalPages > 1 ? '' : 'hidden';
+  prevBtn.style.visibility = multiPage ? '' : 'hidden';
+  nextBtn.style.visibility = multiPage ? '' : 'hidden';
 }
 
 function startRename(tab, boardId, nameEl) {
@@ -672,20 +742,25 @@ function startRename(tab, boardId, nameEl) {
 }
 
 q('#tab-prev').addEventListener('click', () => { tabPage = Math.max(0, tabPage-1); renderTabs(); });
-q('#tab-next').addEventListener('click', () => { tabPage = Math.min(Math.ceil(boards.length/TABS_PER_PAGE)-1, tabPage+1); renderTabs(); });
+q('#tab-next').addEventListener('click', () => { tabPage = Math.min(Math.ceil(boards.length/dynamicTabsPerPage)-1, tabPage+1); renderTabs(); });
 q('#add-board').addEventListener('click', addBoard);
+
+// Re-compute tabs on resize so they always fill available space
+let _resizeTimer;
+window.addEventListener('resize', () => { clearTimeout(_resizeTimer); _resizeTimer = setTimeout(renderTabs, 120); });
 
 // ─── RENDER: BOARD ────────────────────────────────────────────────────────────
 function renderBoard() {
   const cards = currentCards();
   const zones = { todo:[], inprogress:[], archive:[], done:[] };
   cards.forEach(c => { if (zones[c.status]) zones[c.status].push(c); });
-  Object.values(zones).forEach(z => z.sort((a,b) => a.createdAt-b.createdAt));
+  // Sort each zone by sortOrder (falls back to createdAt for legacy cards)
+  Object.values(zones).forEach(z => z.sort((a,b) => (a.sortOrder ?? a.createdAt) - (b.sortOrder ?? b.createdAt)));
 
   renderZone('todo-cards',       zones.todo,        false);
   renderZone('inprogress-cards', zones.inprogress,  false);
   renderZone('archive-cards',    zones.archive,      true);
-  renderZone('done-cards',       zones.done,         true);
+  renderZone('done-cards',       zones.done,         !doneExpanded); // full cards when expanded
 
   q('#todo-count').textContent        = zones.todo.length;
   q('#inprogress-count').textContent  = zones.inprogress.length;
@@ -765,19 +840,31 @@ function onCardMove(e) {
     dragState.sourceEl.classList.add('dragging-source');
     document.body.classList.add('dragging-active');
     showGhost(dragState.cardId, e.clientX, e.clientY);
+    ensureDropIndicator();
   }
   if (dragState.dragging) {
     moveGhost(e.clientX, e.clientY);
     const z = detectZone(e.clientX, e.clientY);
     highlightZone(z);
     dragState.currentZone = z;
+    if (z) {
+      const { insertBefore, refEl } = detectInsertPosition(z, e.clientX, e.clientY, dragState.cardId);
+      dragState.insertBefore = insertBefore;
+      showDropIndicator(z, refEl);
+    } else {
+      hideDropIndicator();
+      dragState.insertBefore = null;
+    }
   }
 }
 
 function onCardUp(e) {
   if (!dragState) return;
   cancelLP();
-  if (dragState.dragging && dragState.currentZone) moveCard(dragState.cardId, dragState.currentZone);
+  hideDropIndicator();
+  if (dragState.dragging && dragState.currentZone) {
+    moveOrReorderCard(dragState.cardId, dragState.currentZone, dragState.insertBefore || null);
+  }
   const el = dragState.sourceEl;
   el.classList.remove('dragging-source');
   el.removeEventListener('pointermove', onCardMove);
@@ -808,6 +895,48 @@ function detectZone(x,y) {
 function highlightZone(zone) { clearZones(); if(zone) q(ZONE_EL[zone])?.classList.add('drag-over'); }
 function clearZones() { ZONES.forEach(z=>q(ZONE_EL[z])?.classList.remove('drag-over')); }
 
+// Detect which card the pointer is above within a zone (for reordering)
+const ZONE_CARD_CONTAINERS = { archive:'#archive-cards', todo:'#todo-cards', inprogress:'#inprogress-cards', done:'#done-cards' };
+function detectInsertPosition(zone, x, y, draggedId) {
+  const sel = ZONE_CARD_CONTAINERS[zone];
+  if (!sel) return { insertBefore: null, refEl: null };
+  const container = q(sel);
+  if (!container) return { insertBefore: null, refEl: null };
+  const cards = Array.from(container.querySelectorAll('.card:not(.dragging-source)'));
+  for (const card of cards) {
+    const r = card.getBoundingClientRect();
+    const midY = r.top + r.height / 2;
+    if (y < midY) return { insertBefore: card.dataset.id, refEl: card };
+  }
+  return { insertBefore: null, refEl: null }; // insert at end
+}
+
+// Drop indicator line
+function ensureDropIndicator() {
+  if (dropIndicator) return;
+  dropIndicator = document.createElement('div');
+  dropIndicator.className = 'drop-indicator';
+  dropIndicator.style.cssText = 'display:none;height:3px;border-radius:2px;background:var(--accent,#ffa300);margin:2px 0;pointer-events:none;transition:none;';
+  document.body.appendChild(dropIndicator);
+}
+function showDropIndicator(zone, refEl) {
+  if (!dropIndicator) return;
+  const sel = ZONE_CARD_CONTAINERS[zone];
+  const container = q(sel);
+  if (!container) { hideDropIndicator(); return; }
+  dropIndicator.style.display = 'block';
+  if (refEl) {
+    container.insertBefore(dropIndicator, refEl);
+  } else {
+    container.appendChild(dropIndicator);
+  }
+}
+function hideDropIndicator() {
+  if (!dropIndicator) return;
+  dropIndicator.style.display = 'none';
+  if (dropIndicator.parentElement) dropIndicator.parentElement.removeChild(dropIndicator);
+}
+
 // Long press ring
 function startRing(x,y) {
   const ring=q('#press-ring'), fill=q('#press-ring-fill');
@@ -830,8 +959,8 @@ document.addEventListener('pointerdown', e => {
 });
 
 // ─── SHELF EXPAND ─────────────────────────────────────────────────────────────
-q('#archive-toggle').addEventListener('click', ()=>{ archiveExpanded=!archiveExpanded; q('#archive-bar').classList.toggle('expanded',archiveExpanded); });
-q('#done-toggle').addEventListener('click',    ()=>{ doneExpanded=!doneExpanded;    q('#done-bar').classList.toggle('expanded',doneExpanded); });
+q('#archive-toggle').addEventListener('click', ()=>{ archiveExpanded=!archiveExpanded; q('#archive-bar').classList.toggle('expanded',archiveExpanded); renderBoard(); });
+q('#done-toggle').addEventListener('click',    ()=>{ doneExpanded=!doneExpanded;    q('#done-bar').classList.toggle('expanded',doneExpanded); renderBoard(); });
 
 // ─── CARD MODAL ───────────────────────────────────────────────────────────────
 q('#fab').addEventListener('click', openModal);
@@ -947,6 +1076,53 @@ document.addEventListener('keydown', e=>{
   }
   if ((e.ctrlKey||e.metaKey) && e.key==='Enter') openModal();
 });
+
+// ─── CSS PATCHES ─────────────────────────────────────────────────────────────
+(function injectStylePatches() {
+  const style = document.createElement('style');
+  style.textContent = `
+    /* Bigger TaskBoards title */
+    .app-title, #app-title, h1.title, .header__title {
+      font-size: clamp(1.4rem, 4vw, 2rem) !important;
+      letter-spacing: .02em;
+    }
+
+    /* Board tabs — show full name, no truncation */
+    .board-tab {
+      flex-shrink: 0 !important;
+      min-width: 0;
+      max-width: none !important;
+    }
+    .board-tab__name {
+      overflow: visible !important;
+      text-overflow: unset !important;
+      white-space: nowrap !important;
+      max-width: none !important;
+    }
+
+    /* Drop indicator line */
+    .drop-indicator {
+      height: 3px !important;
+      border-radius: 2px !important;
+      background: var(--accent, #ffa300) !important;
+      margin: 2px 4px !important;
+      pointer-events: none !important;
+    }
+
+    /* Done section expanded — use grid layout matching main columns */
+    #done-bar.expanded #done-cards {
+      display: flex !important;
+      flex-direction: column !important;
+      gap: 8px !important;
+      padding: 8px !important;
+    }
+    /* Full cards inside expanded done look like todo/inprogress cards */
+    #done-bar.expanded .card {
+      opacity: .85;
+    }
+  `;
+  document.head.appendChild(style);
+})();
 
 // ─── SERVICE WORKER ──────────────────────────────────────────────────────────
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').catch(()=>{});
