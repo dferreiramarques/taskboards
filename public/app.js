@@ -34,9 +34,10 @@ let dynamicTabsPerPage = 4;   // computed dynamically based on available width
 let archiveExpanded = false;
 let doneExpanded    = false;
 let selectedColumn  = 'todo';
-let dragState       = null;   // extended: { cardId, startX, startY, dragging, sourceEl, currentZone, insertBefore }
+let dragState       = null;
 let longPressTimer  = null;
 let deleteCardId    = null;
+let activeCardId    = null;   // card showing reorder buttons
 let dropIndicator   = null;   // the insertion line element
 
 // Auth state
@@ -594,6 +595,40 @@ function moveOrReorderCard(id, newStatus, insertBeforeId) {
   if (newStatus === 'done' && wasStatus !== 'done') setTimeout(launchConfetti, 80);
 }
 
+// Move a card one step up (-1) or down (+1) within its zone
+function moveCardInZone(id, direction) {
+  const cb = currentBoard();
+  const card = cb?.cards.find(c => c.id === id);
+  if (!card) return;
+
+  const zoneCards = cb.cards
+    .filter(c => c.status === card.status)
+    .sort((a, b) => (a.sortOrder ?? a.createdAt) - (b.sortOrder ?? b.createdAt));
+
+  const idx = zoneCards.findIndex(c => c.id === id);
+  const newIdx = idx + direction;
+  if (newIdx < 0 || newIdx >= zoneCards.length) return;
+
+  [zoneCards[idx], zoneCards[newIdx]] = [zoneCards[newIdx], zoneCards[idx]];
+  zoneCards.forEach((c, i) => { c.sortOrder = i; });
+
+  onDataChanged();
+  renderBoard();
+  requestAnimationFrame(() => setActiveCard(id));
+}
+
+function setActiveCard(id) {
+  if (activeCardId && activeCardId !== id) dismissActiveCard();
+  activeCardId = id;
+  document.querySelector(`.card[data-id="${id}"]`)?.classList.add('card--active');
+}
+
+function dismissActiveCard() {
+  if (!activeCardId) return;
+  document.querySelector(`.card[data-id="${activeCardId}"]`)?.classList.remove('card--active');
+  activeCardId = null;
+}
+
 // ─── RENDER: TABS ─────────────────────────────────────────────────────────────
 // PICO-8 palette — vivid, distinct, works on dark & light
 const PICO8 = [
@@ -784,11 +819,19 @@ function buildCardEl(card, compact) {
   el.className = `card card--${card.status}`;
   el.dataset.id = card.id;
 
+  // Reorder buttons shown when card is active (tapped)
+  const reorderBtns = `
+    <div class="card__reorder-btns">
+      <button class="card__reorder-btn card__reorder-up"  title="Move up">↑</button>
+      <button class="card__reorder-btn card__reorder-down" title="Move down">↓</button>
+    </div>`;
+
   if (compact) {
     el.innerHTML = `
       <div class="card__delete-btn" tabindex="-1">✕</div>
       <span class="card__title-compact">${esc(card.title)}</span>
       ${card.owner ? `<span class="card__owner-compact">${esc(card.owner)}</span>` : ''}
+      ${reorderBtns}
     `;
   } else {
     const dc = getDateCls(card.dueDate);
@@ -799,10 +842,12 @@ function buildCardEl(card, compact) {
         ${card.owner ? `<span class="card__owner">${esc(card.owner)}</span>` : '<span></span>'}
         ${card.dueDate ? `<span class="card__date ${dc}">${fmtDate(card.dueDate)}</span>` : ''}
       </div>
+      ${reorderBtns}
     `;
   }
 
   if (card.id === deleteCardId) el.classList.add('delete-mode');
+  if (card.id === activeCardId)  el.classList.add('card--active');
   attachCardEvents(el);
   return el;
 }
@@ -810,21 +855,35 @@ function buildCardEl(card, compact) {
 // ─── DRAG ────────────────────────────────────────────────────────────────────
 function attachCardEvents(el) {
   el.addEventListener('pointerdown', onCardDown, {passive:false});
+
   el.querySelector('.card__delete-btn').addEventListener('pointerdown', e=>e.stopPropagation());
   el.querySelector('.card__delete-btn').addEventListener('click', e => {
     e.stopPropagation();
     if (deleteCardId === el.dataset.id) deleteCard(el.dataset.id);
   });
+
+  // Reorder buttons
+  el.querySelector('.card__reorder-up').addEventListener('pointerdown', e=>e.stopPropagation());
+  el.querySelector('.card__reorder-up').addEventListener('click', e => {
+    e.stopPropagation();
+    moveCardInZone(el.dataset.id, -1);
+  });
+  el.querySelector('.card__reorder-down').addEventListener('pointerdown', e=>e.stopPropagation());
+  el.querySelector('.card__reorder-down').addEventListener('click', e => {
+    e.stopPropagation();
+    moveCardInZone(el.dataset.id, +1);
+  });
 }
 
 function onCardDown(e) {
-  if (e.target.closest('.card__delete-btn')) return;
+  if (e.target.closest('.card__delete-btn'))  return;
+  if (e.target.closest('.card__reorder-btns')) return;
   const cardEl = e.currentTarget, id = cardEl.dataset.id;
   if (deleteCardId && deleteCardId !== id) { dismissDelete(); return; }
   if (deleteCardId === id) return;
   e.preventDefault();
   cardEl.setPointerCapture(e.pointerId);
-  dragState = { cardId:id, startX:e.clientX, startY:e.clientY, dragging:false, sourceEl:cardEl, currentZone:null };
+  dragState = { cardId:id, startX:e.clientX, startY:e.clientY, dragging:false, sourceEl:cardEl, currentZone:null, insertBefore:null };
   startRing(e.clientX, e.clientY);
   longPressTimer = setTimeout(() => activateDelete(id), LONG_PRESS_MS);
   cardEl.addEventListener('pointermove', onCardMove);
@@ -863,7 +922,16 @@ function onCardUp(e) {
   cancelLP();
   hideDropIndicator();
   if (dragState.dragging && dragState.currentZone) {
+    // Drag completed — move/reorder
     moveOrReorderCard(dragState.cardId, dragState.currentZone, dragState.insertBefore || null);
+  } else if (!dragState.dragging) {
+    // Tap (no movement) — toggle reorder buttons
+    const tappedId = dragState.cardId;
+    if (activeCardId === tappedId) {
+      dismissActiveCard();
+    } else {
+      setActiveCard(tappedId);
+    }
   }
   const el = dragState.sourceEl;
   el.classList.remove('dragging-source');
@@ -962,9 +1030,16 @@ function activateDelete(id) { hideRing(); deleteCardId=id; longPressTimer=null; 
 function dismissDelete() { if(!deleteCardId)return; document.querySelector(`.card[data-id="${deleteCardId}"]`)?.classList.remove('delete-mode'); deleteCardId=null; }
 
 document.addEventListener('pointerdown', e => {
-  if (!deleteCardId) return;
-  const card=e.target.closest('.card');
-  if (!card||card.dataset.id!==deleteCardId) dismissDelete();
+  // Dismiss delete mode when tapping outside the delete-mode card
+  if (deleteCardId) {
+    const card = e.target.closest('.card');
+    if (!card || card.dataset.id !== deleteCardId) dismissDelete();
+  }
+  // Dismiss active (reorder) card when tapping outside it
+  if (activeCardId) {
+    const card = e.target.closest('.card');
+    if (!card || card.dataset.id !== activeCardId) dismissActiveCard();
+  }
 });
 
 // ─── SHELF EXPAND ─────────────────────────────────────────────────────────────
@@ -1107,6 +1182,50 @@ document.addEventListener('keydown', e=>{
       text-overflow: unset !important;
       white-space: nowrap !important;
       max-width: none !important;
+    }
+
+    /* Reorder buttons — hidden by default, shown when card is active */
+    .card__reorder-btns {
+      display: none;
+      position: absolute;
+      right: 6px;
+      top: 50%;
+      transform: translateY(-50%);
+      flex-direction: column;
+      gap: 2px;
+    }
+    .card { position: relative; }
+    .card--active .card__reorder-btns {
+      display: flex;
+    }
+    .card__reorder-btn {
+      background: var(--accent, #ffa300);
+      color: #000;
+      border: none;
+      border-radius: 4px;
+      width: 26px;
+      height: 22px;
+      font-size: 13px;
+      line-height: 1;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: bold;
+      opacity: .9;
+      touch-action: manipulation;
+    }
+    .card__reorder-btn:active { opacity: 1; transform: scale(.93); }
+
+    /* Active card highlight */
+    .card--active {
+      outline: 2px solid var(--accent, #ffa300) !important;
+      outline-offset: 1px;
+    }
+    /* Push card content left to leave room for reorder buttons */
+    .card--active .card__title,
+    .card--active .card__title-compact {
+      padding-right: 38px;
     }
 
     /* Done section expanded — use grid layout matching main columns */
