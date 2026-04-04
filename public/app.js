@@ -911,30 +911,39 @@ function detectInsertPosition(zone, x, y, draggedId) {
   return { insertBefore: null, refEl: null }; // insert at end
 }
 
-// Drop indicator line
+// Drop indicator line — always lives in document.body with position:fixed
+// so it NEVER shifts card layout (which would break mobile drag detection)
 function ensureDropIndicator() {
   if (dropIndicator) return;
   dropIndicator = document.createElement('div');
   dropIndicator.className = 'drop-indicator';
-  dropIndicator.style.cssText = 'display:none;height:3px;border-radius:2px;background:var(--accent,#ffa300);margin:2px 0;pointer-events:none;transition:none;';
+  dropIndicator.style.cssText = 'position:fixed;display:none;height:3px;border-radius:2px;background:var(--accent,#ffa300);pointer-events:none;z-index:9999;transition:top .08s ease;box-shadow:0 0 6px var(--accent,#ffa300);';
   document.body.appendChild(dropIndicator);
 }
+
 function showDropIndicator(zone, refEl) {
   if (!dropIndicator) return;
-  const sel = ZONE_CARD_CONTAINERS[zone];
-  const container = q(sel);
-  if (!container) { hideDropIndicator(); return; }
-  dropIndicator.style.display = 'block';
+  const containerEl = q(ZONE_CARD_CONTAINERS[zone]);
+  if (!containerEl) { hideDropIndicator(); return; }
+
+  const cr = containerEl.getBoundingClientRect();
+  let indicatorY;
+
   if (refEl) {
-    container.insertBefore(dropIndicator, refEl);
+    indicatorY = refEl.getBoundingClientRect().top - 2;
   } else {
-    container.appendChild(dropIndicator);
+    const lastCard = [...containerEl.querySelectorAll('.card:not(.dragging-source)')].pop();
+    indicatorY = lastCard ? lastCard.getBoundingClientRect().bottom + 2 : cr.top + 4;
   }
+
+  dropIndicator.style.left    = (cr.left + 6) + 'px';
+  dropIndicator.style.width   = (cr.width - 12) + 'px';
+  dropIndicator.style.top     = indicatorY + 'px';
+  dropIndicator.style.display = 'block';
 }
+
 function hideDropIndicator() {
-  if (!dropIndicator) return;
-  dropIndicator.style.display = 'none';
-  if (dropIndicator.parentElement) dropIndicator.parentElement.removeChild(dropIndicator);
+  if (dropIndicator) dropIndicator.style.display = 'none';
 }
 
 // Long press ring
@@ -1098,15 +1107,6 @@ document.addEventListener('keydown', e=>{
       text-overflow: unset !important;
       white-space: nowrap !important;
       max-width: none !important;
-    }
-
-    /* Drop indicator line */
-    .drop-indicator {
-      height: 3px !important;
-      border-radius: 2px !important;
-      background: var(--accent, #ffa300) !important;
-      margin: 2px 4px !important;
-      pointer-events: none !important;
     }
 
     /* Done section expanded — use grid layout matching main columns */
