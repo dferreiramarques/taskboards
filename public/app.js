@@ -885,9 +885,10 @@ function onCardDown(e) {
   const cardEl = e.currentTarget, id = cardEl.dataset.id;
   if (deleteCardId && deleteCardId !== id) { dismissDelete(); return; }
   if (deleteCardId === id) return;
-  e.preventDefault();
+  // NOTE: no e.preventDefault() here — we let the browser decide scroll vs drag
+  // based on direction. pan-y is set on .card via CSS so vertical always scrolls.
   cardEl.setPointerCapture(e.pointerId);
-  dragState = { cardId:id, startX:e.clientX, startY:e.clientY, dragging:false, sourceEl:cardEl, currentZone:null, insertBefore:null };
+  dragState = { cardId:id, startX:e.clientX, startY:e.clientY, dragging:false, cancelled:false, sourceEl:cardEl, currentZone:null, insertBefore:null };
   startRing(e.clientX, e.clientY);
   longPressTimer = setTimeout(() => activateDelete(id), LONG_PRESS_MS);
   cardEl.addEventListener('pointermove', onCardMove);
@@ -896,8 +897,26 @@ function onCardDown(e) {
 }
 
 function onCardMove(e) {
-  if (!dragState) return;
-  if (!dragState.dragging && Math.hypot(e.clientX-dragState.startX, e.clientY-dragState.startY) > DRAG_THRESHOLD) {
+  if (!dragState || dragState.cancelled) return;
+  if (!dragState.dragging) {
+    const dx = Math.abs(e.clientX - dragState.startX);
+    const dy = Math.abs(e.clientY - dragState.startY);
+    const dist = Math.hypot(dx, dy);
+    if (dist < DRAG_THRESHOLD) return;
+
+    if (dy > dx) {
+      // Vertical intent → user is scrolling, cancel drag entirely
+      cancelLP();
+      dragState.cancelled = true;
+      dragState.sourceEl.removeEventListener('pointermove', onCardMove);
+      dragState.sourceEl.removeEventListener('pointerup',   onCardUp);
+      dragState.sourceEl.removeEventListener('pointercancel', onCardUp);
+      dragState = null;
+      return;
+    }
+
+    // Horizontal intent → it's a cross-column drag, take over from browser
+    e.preventDefault();
     cancelLP();
     dragState.dragging = true;
     dragState.sourceEl.classList.add('dragging-source');
@@ -906,6 +925,7 @@ function onCardMove(e) {
     ensureDropIndicator();
   }
   if (dragState.dragging) {
+    e.preventDefault();
     moveGhost(e.clientX, e.clientY);
     const z = detectZone(e.clientX, e.clientY);
     highlightZone(z);
@@ -1198,7 +1218,9 @@ document.addEventListener('keydown', e=>{
       flex-direction: column;
       gap: 2px;
     }
-    .card { position: relative; }
+    /* touch-action: pan-y lets vertical scroll work natively on mobile.
+       Horizontal swipe is still captured by JS for cross-column drag. */
+    .card { position: relative; touch-action: pan-y; }
     .card--active .card__reorder-btns {
       display: flex;
     }
