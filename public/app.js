@@ -1,5 +1,9 @@
 'use strict';
 
+// ─── VERSION ─────────────────────────────────────────────────────────────────
+const APP_VERSION = '2.4.0'; // reorder buttons + dynamic tabs
+console.log('%c TaskBoards v' + APP_VERSION + ' loaded', 'background:#ffa300;color:#000;padding:2px 8px;border-radius:4px;font-weight:bold');
+
 // ─── CONFIG & CONSTANTS ───────────────────────────────────────────────────────
 const GOOGLE_CLIENT_ID  = (window.TASKBOARDS_CONFIG || {}).GOOGLE_CLIENT_ID || '';
 const DRIVE_SCOPE       = 'https://www.googleapis.com/auth/drive.appdata openid email profile';
@@ -1244,7 +1248,18 @@ document.addEventListener('keydown', e=>{
 })();
 
 // ─── SERVICE WORKER ──────────────────────────────────────────────────────────
-if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').catch(()=>{});
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('./sw.js').then(reg => {
+    // Force check for updates immediately so new app.js is served
+    reg.update().catch(() => {});
+  }).catch(() => {});
+
+  // If a new SW is waiting, activate it immediately (skip waiting)
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    // New SW took over — reload once to get fresh assets
+    window.location.reload();
+  });
+}
 
 // ─── INIT ────────────────────────────────────────────────────────────────────
 initTheme();
