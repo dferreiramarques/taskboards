@@ -28,6 +28,7 @@
 <body>
   <div id="particles" class="particles" aria-hidden="true"></div>
   <div id="confetti-layer" class="confetti-layer" aria-hidden="true"></div>
+  <div id="toast-container" class="toast-container" aria-live="polite"></div>
 
   <!-- ── TOP BAR ROW 1: login + brand + actions ── -->
   <div class="topbar">
@@ -80,6 +81,14 @@
     </div>
     <button class="tab-nav" id="tab-next" title="Next boards">›</button>
     <button class="tab-add" id="add-board" title="New board">+</button>
+  </div>
+
+  <!-- ── OWNER FILTER CHIPS ── -->
+  <div class="owner-filter-bar" id="owner-filter-bar">
+    <span class="owner-filter-label">Filter:</span>
+    <div class="owner-filter-chips" id="owner-filter-chips">
+      <!-- Owner chips injected by JS -->
+    </div>
   </div>
 
   <!-- ── ARCHIVE BAR ── -->
@@ -241,7 +250,7 @@
           </div>
           <div class="help__row">
             <span class="help__icon" style="color:#ef4444">✕</span>
-            <div><strong>Delete a card</strong> — Hold for <strong>2 seconds</strong>. A red ✕ badge appears — click it to delete.</div>
+            <div><strong>Delete a card</strong> — Double-click on a card. A red ✕ badge appears — click it to delete. Click elsewhere to cancel.</div>
           </div>
         </div>
         <div class="help__divider"></div>
@@ -251,12 +260,6 @@
       </div>
     </div>
   </div>
-
-  <!-- Long press ring -->
-  <svg id="press-ring" class="press-ring hidden" viewBox="0 0 44 44">
-    <circle cx="22" cy="22" r="18" class="press-ring__track" />
-    <circle cx="22" cy="22" r="18" class="press-ring__fill" id="press-ring-fill" />
-  </svg>
 
   <script src="./app.js"></script>
 </body>
