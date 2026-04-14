@@ -257,13 +257,21 @@ body {
   background: var(--archive-bg);
   border-bottom: 1px solid var(--archive-bdr);
   box-shadow: 0 4px 20px var(--shadow);
+  transition: height .35s cubic-bezier(.4,0,.2,1), 
+              background .35s ease, 
+              border-color .35s ease,
+              box-shadow .25s ease;
 }
 
-.shelf--archive.expanded { height: 210px; }
+.shelf--archive.expanded { 
+  height: 210px; 
+  box-shadow: 0 8px 32px var(--shadow);
+}
 
 .shelf--archive.drag-over {
   border-bottom-color: var(--archive-acc);
   background: var(--archive-dim);
+  box-shadow: 0 8px 32px rgba(61,139,205,.15);
 }
 
 /* DONE  — same expansion mechanism, expands upward visually by pushing board */
@@ -272,13 +280,21 @@ body {
   background: var(--done-bg);
   border-top: 1px solid var(--done-bdr);
   box-shadow: 0 -4px 20px var(--shadow);
+  transition: height .35s cubic-bezier(.4,0,.2,1), 
+              background .35s ease, 
+              border-color .35s ease,
+              box-shadow .25s ease;
 }
 
-.shelf--done.expanded { height: 210px; }
+.shelf--done.expanded { 
+  height: 210px; 
+  box-shadow: 0 -8px 32px var(--shadow);
+}
 
 .shelf--done.drag-over {
   border-top-color: var(--done-acc);
   background: var(--done-dim);
+  box-shadow: 0 -8px 32px rgba(168,85,247,.15);
 }
 
 /* ─── SHELF HEADER ───────────────────────────────────────────────────── */
@@ -305,10 +321,16 @@ body {
   font-weight: 700;
   letter-spacing: .15em;
   color: var(--text-dim);
-  transition: color .18s;
+  transition: color .2s ease;
 }
 
-.shelf__header:hover .shelf__label { color: var(--text); }
+.shelf__header:hover .shelf__label { 
+  color: var(--text); 
+  text-shadow: 0 0 12px currentColor;
+}
+
+.shelf--archive .shelf__header:hover .shelf__label { color: var(--archive-acc); }
+.shelf--done .shelf__header:hover .shelf__label { color: var(--done-acc); }
 
 .shelf__count {
   background: var(--surface-2);
@@ -320,25 +342,33 @@ body {
   min-width: 22px;
   text-align: center;
   color: var(--text-dim);
+  transition: all .2s ease;
 }
 
 .shelf--archive .shelf__count { color: var(--archive-acc); border-color: var(--archive-bdr); }
 .shelf--done    .shelf__count { color: var(--done-acc);    border-color: var(--done-bdr); }
+
+.shelf__header:hover .shelf__count {
+  transform: scale(1.1);
+}
 
 .shelf__hint {
   font-size: 10px;
   color: var(--text-muted);
   letter-spacing: .04em;
   opacity: 0;
-  transition: opacity .2s;
+  transition: opacity .25s ease;
 }
 .shelf__header:hover .shelf__hint { opacity: 1; }
 
 .shelf__chevron {
   color: var(--text-muted);
   font-size: 12px;
-  transition: transform .3s cubic-bezier(.4,0,.2,1);
+  transition: transform .35s cubic-bezier(.4,0,.2,1), color .2s ease;
 }
+
+.shelf--archive .shelf__header:hover .shelf__chevron { color: var(--archive-acc); }
+.shelf--done .shelf__header:hover .shelf__chevron { color: var(--done-acc); }
 
 .shelf--archive.expanded #archive-chevron { transform: rotate(180deg); }
 .shelf--done.expanded    #done-chevron    { transform: rotate(180deg); }
@@ -556,8 +586,8 @@ body.dragging-active .shelf--done    .drop-overlay { display: flex; }
 
 .card:hover {
   border-color: var(--border-light);
-  box-shadow: 0 6px 22px var(--shadow);
-  transform: translateY(-2px);
+  box-shadow: 0 8px 28px var(--shadow), 0 0 0 1px rgba(255,255,255,.03);
+  transform: translateY(-3px);
 }
 
 .card--todo {
@@ -565,9 +595,17 @@ body.dragging-active .shelf--done    .drop-overlay { display: flex; }
   background: linear-gradient(135deg, var(--todo-dim) 0%, var(--surface) 55%);
 }
 
+.card--todo:hover {
+  box-shadow: 0 8px 28px var(--todo-glow), 0 0 0 1px rgba(79,156,249,.15);
+}
+
 .card--inprogress {
   border-left: 3px solid var(--inprog);
   background: linear-gradient(135deg, var(--inprog-dim) 0%, var(--surface) 55%);
+}
+
+.card--inprogress:hover {
+  box-shadow: 0 8px 28px var(--inprog-glow), 0 0 0 1px rgba(251,146,60,.15);
 }
 
 .card.delete-mode {
@@ -1368,4 +1406,110 @@ body.dragging-active .card:not(.dragging-source) { pointer-events: none; }
   white-space: nowrap;
   font-family: 'JetBrains Mono', monospace;
   cursor: default;
+}
+
+/* ─── TOAST NOTIFICATIONS ────────────────────────────────────────────── */
+.toast-container {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 9990;
+  pointer-events: none;
+}
+
+.toast {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 18px;
+  background: var(--surface);
+  border: 1px solid var(--border-light);
+  border-radius: 10px;
+  box-shadow: 0 8px 32px var(--shadow);
+  font-size: 12px;
+  color: var(--text);
+  white-space: nowrap;
+  opacity: 0;
+  transform: translateY(20px) scale(0.9);
+  transition: opacity .25s ease, transform .25s cubic-bezier(.34,1.56,.64,1);
+}
+
+.toast--visible {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+}
+
+.toast__icon {
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.toast--success .toast__icon { color: #34d399; }
+.toast--error .toast__icon { color: var(--delete); }
+.toast--info .toast__icon { color: var(--accent); }
+.toast--loading .toast__icon { color: var(--accent); animation: spin 1s linear infinite; }
+
+.toast__message {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* ─── SKELETON LOADING ───────────────────────────────────────────────── */
+.skeleton-loader {
+  position: fixed;
+  inset: 0;
+  background: var(--bg);
+  z-index: 500;
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  opacity: 0;
+  transition: opacity .3s ease;
+}
+
+.skeleton--visible {
+  display: flex !important;
+  opacity: 1;
+}
+
+.skeleton-card {
+  width: 280px;
+  height: 80px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  position: relative;
+  overflow: hidden;
+}
+
+.skeleton-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255,255,255,.04),
+    transparent
+  );
+  animation: shimmer 1.5s infinite;
+}
+
+.skeleton-card--short { width: 200px; height: 60px; }
+.skeleton-card--medium { width: 240px; height: 70px; }
+
+@keyframes shimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
 }
