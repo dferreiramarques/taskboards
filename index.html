@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#0e0e16" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Taskboards" />
+  <title>Taskboards</title>
+  <link rel="manifest" href="./manifest.json" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="./style.css" />
+  <script src="./config.js"></script>
+  <!-- Force SW update if stale -->
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistrations().then(regs => {
+        regs.forEach(r => r.update());
+      });
+    }
+  </script>
+  <!-- Google Identity Services — loaded async, app checks readiness -->
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+</head>
+<body>
+  <div id="particles" class="particles" aria-hidden="true"></div>
+  <div id="confetti-layer" class="confetti-layer" aria-hidden="true"></div>
+  <div id="toast-container" class="toast-container" aria-live="polite"></div>
+
+  <!-- ── TOP BAR ROW 1: login + brand + actions ── -->
+  <div class="topbar">
+    <!-- LEFT: brand -->
+    <div class="topbar__brand">
+      <span class="topbar__logo">◈</span>
+      <span class="topbar__name">TASKBOARDS</span>
+    </div>
+
+    <!-- RIGHT: help + theme + Google login -->
+    <div class="topbar__actions">
+      <button id="help-btn" class="topbar__btn" title="How it works">?</button>
+      <button id="theme-btn" class="topbar__btn topbar__btn--theme" title="Toggle theme">
+        <span id="theme-icon">☽</span>
+      </button>
+
+      <!-- Google SSO -->
+      <div class="topbar__login" id="login-area">
+        <button class="login-btn" id="login-btn" title="Sign in with Google">
+          <svg class="login-btn__icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+            <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+            <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05"/>
+            <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+          </svg>
+          <span class="login-btn__label">Sign in</span>
+        </button>
+        <div class="user-pill hidden" id="user-pill">
+          <img class="user-pill__avatar" id="user-avatar" src="" alt="" />
+          <span class="user-pill__name" id="user-name"></span>
+          <div class="user-pill__menu" id="user-menu">
+            <div class="user-pill__menu-email" id="user-email-menu"></div>
+            <div class="user-pill__menu-divider"></div>
+            <button class="user-pill__menu-item" id="logout-btn">Sign out</button>
+            <div class="sync-status" id="sync-status">
+              <span class="sync-dot" id="sync-dot"></span>
+              <span id="sync-label">Offline</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── TOP BAR ROW 2: board tabs ── -->
+  <div class="boards-bar">
+    <button class="tab-nav" id="tab-prev" title="Previous boards">‹</button>
+    <div class="boards-tabs" id="boards-tabs">
+      <!-- Tabs injected by JS -->
+    </div>
+    <button class="tab-nav" id="tab-next" title="Next boards">›</button>
+    <button class="tab-add" id="add-board" title="New board">+</button>
+  </div>
+
+  <!-- ── OWNER FILTER CHIPS ── -->
+  <div class="owner-filter-bar" id="owner-filter-bar">
+    <span class="owner-filter-label">Filter:</span>
+    <div class="owner-filter-chips" id="owner-filter-chips">
+      <!-- Owner chips injected by JS -->
+    </div>
+  </div>
+
+  <!-- ── ARCHIVE BAR ── -->
+  <div id="archive-bar" class="shelf shelf--archive" data-zone="archive">
+    <div class="shelf__header" id="archive-toggle">
+      <div class="shelf__header-left">
+        <span class="shelf__icon">◈</span>
+        <span class="shelf__label">ARCHIVE</span>
+        <span class="shelf__count" id="archive-count">0</span>
+      </div>
+      <div class="shelf__header-right">
+        <span class="shelf__hint">click to expand</span>
+        <span class="shelf__chevron" id="archive-chevron">▾</span>
+      </div>
+    </div>
+    <div class="shelf__body" id="archive-body">
+      <div class="shelf__cards" id="archive-cards"></div>
+      <div class="shelf__empty" id="archive-empty">Drag cards here to park ideas for later</div>
+    </div>
+    <div class="drop-overlay" id="archive-drop-overlay">
+      <span class="drop-overlay__icon">◈</span><span>ARCHIVE</span>
+    </div>
+  </div>
+
+  <!-- ── MAIN BOARD ── -->
+  <main class="board" id="board">
+    <section class="column column--todo" id="todo-column" data-zone="todo">
+      <div class="column__header">
+        <span class="column__dot"></span>
+        <span class="column__title">TO DO</span>
+        <span class="column__count" id="todo-count">0</span>
+      </div>
+      <div class="column__cards" id="todo-cards">
+        <div class="column__empty" id="todo-empty">
+          <span class="column__empty-icon">○</span>
+          <span>No tasks yet</span>
+        </div>
+      </div>
+    </section>
+    <div class="board__divider"></div>
+    <section class="column column--inprogress" id="inprogress-column" data-zone="inprogress">
+      <div class="column__header">
+        <span class="column__dot"></span>
+        <span class="column__title">IN PROGRESS</span>
+        <span class="column__count" id="inprogress-count">0</span>
+      </div>
+      <div class="column__cards" id="inprogress-cards">
+        <div class="column__empty" id="inprogress-empty">
+          <span class="column__empty-icon">◑</span>
+          <span>Nothing in progress</span>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- ── DONE BAR ── -->
+  <div id="done-bar" class="shelf shelf--done" data-zone="done">
+    <div class="shelf__header" id="done-toggle">
+      <div class="shelf__header-left">
+        <span class="shelf__icon shelf__icon--done">✓</span>
+        <span class="shelf__label">DONE</span>
+        <span class="shelf__count" id="done-count">0</span>
+      </div>
+      <div class="shelf__header-right">
+        <span class="shelf__hint">click to expand</span>
+        <span class="shelf__chevron" id="done-chevron">▴</span>
+      </div>
+    </div>
+    <div class="shelf__body shelf__body--done" id="done-body">
+      <div class="shelf__cards" id="done-cards"></div>
+      <div class="shelf__empty" id="done-empty">Drag completed cards here</div>
+    </div>
+    <div class="drop-overlay" id="done-drop-overlay">
+      <span class="drop-overlay__icon">✓</span><span>MARK DONE</span>
+    </div>
+  </div>
+
+  <div id="drag-ghost" class="drag-ghost"></div>
+
+  <button id="fab" class="fab" title="New card (Ctrl+Enter)">
+    <span class="fab__icon">+</span>
+  </button>
+
+  <!-- ── NEW CARD MODAL ── -->
+  <div id="modal-overlay" class="modal-overlay hidden">
+    <div class="modal" id="modal">
+      <div class="modal__header">
+        <span class="modal__title">NEW CARD</span>
+        <button class="modal__close" id="modal-close">✕</button>
+      </div>
+      <div class="modal__body">
+        <div class="modal__field">
+          <label class="modal__label" for="input-title">TITLE *</label>
+          <input class="modal__input" id="input-title" type="text" placeholder="Task name..." maxlength="80" autocomplete="off" />
+        </div>
+        <div class="modal__field">
+          <label class="modal__label" for="input-owner">OWNER</label>
+          <input class="modal__input" id="input-owner" type="text" placeholder="Assignee name..." maxlength="40" autocomplete="off" list="owner-datalist" />
+          <datalist id="owner-datalist"></datalist>
+          <div class="owner-chips" id="owner-chips"></div>
+        </div>
+        <div class="modal__field">
+          <label class="modal__label" for="input-date">DUE DATE</label>
+          <input class="modal__input modal__input--date" id="input-date" type="date" />
+        </div>
+        <div class="modal__field">
+          <label class="modal__label">STARTING COLUMN</label>
+          <div class="modal__toggle">
+            <button class="modal__toggle-btn active" data-col="todo">TO DO</button>
+            <button class="modal__toggle-btn" data-col="inprogress">IN PROGRESS</button>
+          </div>
+        </div>
+      </div>
+      <div class="modal__footer">
+        <button class="modal__submit" id="modal-submit">CREATE CARD →</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── HELP MODAL ── -->
+  <div id="help-overlay" class="modal-overlay hidden">
+    <div class="modal modal--help" id="help-modal">
+      <div class="modal__header">
+        <span class="modal__title">HOW IT WORKS</span>
+        <button class="modal__close" id="help-close">✕</button>
+      </div>
+      <div class="help__body">
+        <div class="help__section">
+          <div class="help__row">
+            <span class="help__icon help__icon--archive">◈</span>
+            <div><strong>Archive bar</strong> — Idea bank at the top. Drag cards here to park them. Click to expand/browse. Drag back to reactivate.</div>
+          </div>
+          <div class="help__row">
+            <span class="help__icon help__icon--todo">○</span>
+            <div><strong>To Do</strong> — Your backlog. Cards show title, owner, and due date.</div>
+          </div>
+          <div class="help__row">
+            <span class="help__icon help__icon--inprog">◑</span>
+            <div><strong>In Progress</strong> — Drag cards between columns to change their status.</div>
+          </div>
+          <div class="help__row">
+            <span class="help__icon help__icon--done">✓</span>
+            <div><strong>Done bar</strong> — Completed tasks. Click to expand and review.</div>
+          </div>
+        </div>
+        <div class="help__divider"></div>
+        <div class="help__section">
+          <div class="help__row">
+            <span class="help__icon">⊞</span>
+            <div><strong>Multiple boards</strong> — Click <strong>+</strong> in the boards bar to add a board. Double-click a tab to rename it. Use <strong>‹ ›</strong> to paginate when you have many boards.</div>
+          </div>
+          <div class="help__row">
+            <span class="help__icon">☁</span>
+            <div><strong>Google Drive sync</strong> — Sign in with Google to save all boards to your Drive automatically. Data is stored in a private app folder only this app can access.</div>
+          </div>
+          <div class="help__row">
+            <span class="help__icon">✦</span>
+            <div><strong>New card</strong> — Click the <strong>+</strong> button or press <kbd>Ctrl</kbd> + <kbd>Enter</kbd>.</div>
+          </div>
+          <div class="help__row">
+            <span class="help__icon" style="color:#ef4444">✕</span>
+            <div><strong>Delete a card</strong> — Hold for <strong>2 seconds</strong>. A red ✕ badge appears — click it to delete.</div>
+          </div>
+        </div>
+        <div class="help__divider"></div>
+        <div class="help__tip">
+          📅 <strong>Red date</strong> = overdue &nbsp;·&nbsp; <strong>Orange date</strong> = due in ≤3 days &nbsp;·&nbsp; Data auto-saves to localStorage (or Google Drive when signed in).
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Long press ring -->
+  <svg id="press-ring" class="press-ring hidden" viewBox="0 0 44 44">
+    <circle cx="22" cy="22" r="18" class="press-ring__track" />
+    <circle cx="22" cy="22" r="18" class="press-ring__fill" id="press-ring-fill" />
+  </svg>
+
+  <script src="./app.js"></script>
+</body>
+</html>
