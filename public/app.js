@@ -1157,8 +1157,27 @@ document.addEventListener('pointerdown', e => {
 });
 
 // ─── SHELF EXPAND ─────────────────────────────────────────────────────────────
-q('#archive-toggle').addEventListener('click', ()=>{ archiveExpanded=!archiveExpanded; q('#archive-bar').classList.toggle('expanded',archiveExpanded); renderBoard(); });
-q('#done-toggle').addEventListener('click',    ()=>{ doneExpanded=!doneExpanded;    q('#done-bar').classList.toggle('expanded',doneExpanded); renderBoard(); });
+function updateFabPosition() {
+  const fab     = q('#fab');
+  const doneBar = q('#done-bar');
+  if (!fab || !doneBar) return;
+  fab.style.bottom = doneExpanded
+    ? (16 + doneBar.offsetHeight) + 'px'
+    : '24px';
+}
+
+q('#archive-toggle').addEventListener('click', () => {
+  archiveExpanded = !archiveExpanded;
+  q('#archive-bar').classList.toggle('expanded', archiveExpanded);
+  renderBoard();
+});
+q('#done-toggle').addEventListener('click', () => {
+  doneExpanded = !doneExpanded;
+  q('#done-bar').classList.toggle('expanded', doneExpanded);
+  renderBoard();
+  // Small delay so the DOM has updated height before measuring
+  requestAnimationFrame(updateFabPosition);
+});
 
 // ─── CARD MODAL ───────────────────────────────────────────────────────────────
 q('#fab').addEventListener('click', openModal);
@@ -1284,46 +1303,81 @@ document.addEventListener('keydown', e=>{
 (function injectStylePatches() {
   const style = document.createElement('style');
   style.textContent = `
-    /* Bigger TaskBoards title */
-    .header__title { font-size: clamp(1rem, 3.5vw, 1.25rem) !important; }
+    /* 1. Hide "Filter:" label — keep only the chips */
+    #owner-filter-bar .filter-label,
+    #owner-filter-bar > span:first-child,
+    #owner-filter-bar > label {
+      display: none !important;
+    }
+    /* Owner filter bar — chips only, no label */
+    #owner-filter-bar {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      background: var(--bg, #fff);
+      border-bottom: 1px solid var(--border, #d1d9e0);
+      flex-wrap: wrap;
+    }
+    #owner-filter-chips {
+      display: flex;
+      gap: 4px;
+      flex-wrap: wrap;
+    }
+    .owner-filter-chip {
+      padding: 2px 10px;
+      border: 1px solid var(--border, #d1d9e0);
+      border-radius: 2em;
+      background: var(--bg-muted, #f6f8fa);
+      font-size: 12px;
+      color: var(--text-muted, #59636e);
+      cursor: pointer;
+      transition: background .1s, border-color .1s, color .1s;
+      font-family: inherit;
+    }
+    .owner-filter-chip:hover  { background: var(--bg-inset, #eaeef2); color: var(--text, #1f2328); }
+    .owner-filter-chip.active { background: var(--accent-bg, #ddf4ff); border-color: var(--accent, #0969da); color: var(--accent, #0969da); font-weight: 600; }
 
-    /* Board tabs — show full name, no truncation */
-    .board-tab { flex-shrink: 0 !important; max-width: none !important; }
-    .board-tab__name { overflow: visible !important; text-overflow: unset !important; white-space: nowrap !important; max-width: none !important; }
+    /* 2. Board tab vertical alignment */
+    .tabs-row {
+      align-items: center !important;
+      min-height: 40px;
+    }
+    .board-tab {
+      height: 28px;
+      align-items: center;
+      display: flex;
+    }
+    #tab-prev, #tab-next, #add-board {
+      height: 28px;
+      align-self: center;
+    }
 
-    /* Done expanded full cards */
+    /* 3. FAB transition for smooth movement */
+    #fab { transition: bottom .2s ease, opacity .15s, transform .12s; }
+
+    /* Done section title colour */
+    #done-toggle { color: var(--done-fg, #8250df) !important; }
+
+    /* Done expanded — full cards */
     #done-bar.expanded #done-cards { display: flex !important; flex-direction: column !important; gap: 6px !important; padding: 8px 12px !important; }
     #done-bar.expanded .card { opacity: .85; }
-
-    /* Drag-ready state: subtle lift before drag starts */
-    .card.drag-ready { transform: scale(1.02); box-shadow: var(--shadow-md); transition: transform .1s, box-shadow .1s; z-index: 10; }
-
-    /* Edit mode: title input */
-    .card__title-input {
-      width: 100%;
-      font: inherit;
-      font-size: 13px;
-      font-weight: 500;
-      color: var(--text, #1f2328);
-      background: transparent;
-      border: none;
-      outline: none;
-      padding: 0;
-      margin: 0;
-      resize: none;
-    }
-
-    /* Edit mode: card outline + delete button always visible */
-    .card--editing {
-      outline: 2px solid var(--focus-outlineColor, #0969da) !important;
-      outline-offset: 1px;
-    }
-    .card--editing .card__delete-btn,
-    .card__delete-btn.visible {
-      display: flex !important;
-    }
+    #done-bar.expanded #done-cards .card { display: block !important; padding: 10px 12px !important; }
   `;
   document.head.appendChild(style);
+
+  // Also nuke "Filter:" text node if it's a bare text in the bar
+  requestAnimationFrame(() => {
+    const bar = document.querySelector('#owner-filter-bar');
+    if (!bar) return;
+    bar.childNodes.forEach(node => {
+      if (node.nodeType === 3 && /filter/i.test(node.textContent)) node.remove();
+      if (node.nodeType === 1 && node.tagName !== 'DIV' && node.tagName !== 'BUTTON'
+          && /filter/i.test(node.textContent) && !node.querySelector('button')) {
+        node.style.display = 'none';
+      }
+    });
+  });
 })();
 
 // ─── SERVICE WORKER ──────────────────────────────────────────────────────────
