@@ -1111,11 +1111,16 @@ function initTheme() {
   applyTheme(localStorage.getItem(LS_THEME) || 'dark', false);
 }
 function applyTheme(theme, animate=true) {
+  // Primer theming via data-color-mode on html element
+  document.documentElement.setAttribute('data-color-mode', theme);
+  document.documentElement.setAttribute('data-light-theme', 'light');
+  document.documentElement.setAttribute('data-dark-theme', 'dark');
+  // Keep our own data-theme for any remaining custom selectors
   document.documentElement.setAttribute('data-theme', theme);
   q('#theme-icon').textContent = theme==='dark' ? '☽' : '☀';
   localStorage.setItem(LS_THEME, theme);
   const mc=document.querySelector('meta[name="theme-color"]');
-  if(mc) mc.setAttribute('content', theme==='dark'?'#0e0e16':'#f3f0e8');
+  if(mc) mc.setAttribute('content', theme==='dark'?'#161b22':'#ffffff');
 }
 q('#theme-btn').addEventListener('click', ()=>{
   const cur=document.documentElement.getAttribute('data-theme');
@@ -1186,19 +1191,18 @@ document.addEventListener('keydown', e=>{
 });
 
 // ─── CSS PATCHES ─────────────────────────────────────────────────────────────
+// style.css handles all Primer tokens; this patch only adds dynamic overrides
 (function injectStylePatches() {
   const style = document.createElement('style');
   style.textContent = `
     /* Bigger TaskBoards title */
-    .app-title, #app-title, h1.title, .header__title {
-      font-size: clamp(1.4rem, 4vw, 2rem) !important;
-      letter-spacing: .02em;
+    .header__title {
+      font-size: clamp(1rem, 3.5vw, 1.25rem) !important;
     }
 
     /* Board tabs — show full name, no truncation */
     .board-tab {
       flex-shrink: 0 !important;
-      min-width: 0;
       max-width: none !important;
     }
     .board-tab__name {
@@ -1208,63 +1212,14 @@ document.addEventListener('keydown', e=>{
       max-width: none !important;
     }
 
-    /* Reorder buttons — hidden by default, shown when card is active */
-    .card__reorder-btns {
-      display: none;
-      position: absolute;
-      right: 6px;
-      top: 50%;
-      transform: translateY(-50%);
-      flex-direction: column;
-      gap: 2px;
-    }
-    /* touch-action: pan-y lets vertical scroll work natively on mobile.
-       Horizontal swipe is still captured by JS for cross-column drag. */
-    .card { position: relative; touch-action: pan-y; }
-    .card--active .card__reorder-btns {
-      display: flex;
-    }
-    .card__reorder-btn {
-      background: var(--accent, #ffa300);
-      color: #000;
-      border: none;
-      border-radius: 4px;
-      width: 26px;
-      height: 22px;
-      font-size: 13px;
-      line-height: 1;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-weight: bold;
-      opacity: .9;
-      touch-action: manipulation;
-    }
-    .card__reorder-btn:active { opacity: 1; transform: scale(.93); }
-
-    /* Active card highlight */
-    .card--active {
-      outline: 2px solid var(--accent, #ffa300) !important;
-      outline-offset: 1px;
-    }
-    /* Push card content left to leave room for reorder buttons */
-    .card--active .card__title,
-    .card--active .card__title-compact {
-      padding-right: 38px;
-    }
-
-    /* Done section expanded — use grid layout matching main columns */
+    /* Done section expanded — full card layout */
     #done-bar.expanded #done-cards {
       display: flex !important;
       flex-direction: column !important;
-      gap: 8px !important;
-      padding: 8px !important;
+      gap: 6px !important;
+      padding: 8px 12px !important;
     }
-    /* Full cards inside expanded done look like todo/inprogress cards */
-    #done-bar.expanded .card {
-      opacity: .85;
-    }
+    #done-bar.expanded .card { opacity: .85; }
   `;
   document.head.appendChild(style);
 })();
