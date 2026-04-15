@@ -1,8 +1,8 @@
 'use strict';
 
 // ─── VERSION ─────────────────────────────────────────────────────────────────
-const APP_VERSION = '2.4.0'; // reorder buttons + dynamic tabs
-console.log('%c TaskBoards v' + APP_VERSION + ' loaded', 'background:#ffa300;color:#000;padding:2px 8px;border-radius:4px;font-weight:bold');
+const APP_VERSION = '2.5.0'; // double-tap edit + drag reorder
+console.log('%c TaskBoards v' + APP_VERSION + ' loaded', 'background:#0969da;color:#fff;padding:2px 8px;border-radius:4px;font-weight:bold');
 
 // ─── CONFIG & CONSTANTS ───────────────────────────────────────────────────────
 const GOOGLE_CLIENT_ID  = (window.TASKBOARDS_CONFIG || {}).GOOGLE_CLIENT_ID || '';
@@ -26,23 +26,23 @@ function lsGet(key) {
 function lsSet(key, val) { localStorage.setItem(key, val); }
 function lsDel(key)      { localStorage.removeItem(key); }
 
-const DRAG_THRESHOLD  = 8;
-const LONG_PRESS_MS   = 2000;
-const SAVE_DEBOUNCE   = 1800;  // ms after last change before Drive save
+const DRAG_THRESHOLD  = 6;
+const DRAG_HOLD_MS    = 180;  // hold before drag activates — allows scroll on quick swipe
+const DOUBLE_TAP_MS   = 320;  // max gap between taps to count as double-tap
+const SAVE_DEBOUNCE   = 1800;
 
 // ─── STATE ───────────────────────────────────────────────────────────────────
-let boards         = [];       // [{id, name, cards:[]}]
+let boards         = [];
 let currentBoardId = null;
 let tabPage        = 0;
-let dynamicTabsPerPage = 4;   // computed dynamically based on available width
+let dynamicTabsPerPage = 4;
 let archiveExpanded = false;
 let doneExpanded    = false;
 let selectedColumn  = 'todo';
-let dragState       = null;
-let longPressTimer  = null;
-let deleteCardId    = null;
-let activeCardId    = null;   // card showing reorder buttons
-let dropIndicator   = null;   // the insertion line element
+let dragState       = null;   // { cardId, startX, startY, dragging, ready, holdTimer, sourceEl, currentZone, insertBefore }
+let editingCardId   = null;   // card currently in inline-edit mode
+let lastTap         = { id: null, time: 0 };   // double-tap detection
+let dropIndicator   = null;
 
 // Auth state
 let gAccessToken   = null;
@@ -565,7 +565,13 @@ function deleteCard(id) {
   } else doDelete();
 }
 
-function moveCard(id, newStatus) {
+function updateCardTitle(id, newTitle) {
+  const cb = currentBoard();
+  const card = cb?.cards.find(c => c.id === id);
+  if (!card) return;
+  const t = newTitle.trim();
+  if (t && t !== card.title) { card.title = t; onDataChanged(); }
+}
   moveOrReorderCard(id, newStatus, null);
 }
 
@@ -599,38 +605,67 @@ function moveOrReorderCard(id, newStatus, insertBeforeId) {
   if (newStatus === 'done' && wasStatus !== 'done') setTimeout(launchConfetti, 80);
 }
 
-// Move a card one step up (-1) or down (+1) within its zone
-function moveCardInZone(id, direction) {
-  const cb = currentBoard();
-  const card = cb?.cards.find(c => c.id === id);
+// ─── INLINE EDIT MODE ────────────────────────────────────────────────────────
+function enterEditMode(id) {
+  if (editingCardId === id) return;
+  exitEditMode(true); // save any previous edit first
+
+  editingCardId = id;
+  const el = document.querySelector(`.card[data-id="${id}"]`);
+  if (!el) return;
+  el.classList.add('card--editing');
+
+  // Replace title element with an input
+  const titleEl = el.querySelector('.card__title, .card__title-compact');
+  if (!titleEl) return;
+  const card = currentCards().find(c => c.id === id);
   if (!card) return;
 
-  const zoneCards = cb.cards
-    .filter(c => c.status === card.status)
-    .sort((a, b) => (a.sortOrder ?? a.createdAt) - (b.sortOrder ?? b.createdAt));
+  const input = document.createElement('input');
+  input.className = 'card__title-input';
+  input.value = card.title;
+  input.maxLength = 120;
+  titleEl.replaceWith(input);
 
-  const idx = zoneCards.findIndex(c => c.id === id);
-  const newIdx = idx + direction;
-  if (newIdx < 0 || newIdx >= zoneCards.length) return;
+  // Show delete button while editing
+  el.querySelector('.card__delete-btn')?.classList.add('visible');
 
-  [zoneCards[idx], zoneCards[newIdx]] = [zoneCards[newIdx], zoneCards[idx]];
-  zoneCards.forEach((c, i) => { c.sortOrder = i; });
+  requestAnimationFrame(() => { input.focus(); input.select(); });
 
-  onDataChanged();
-  renderBoard();
-  requestAnimationFrame(() => setActiveCard(id));
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter')  { e.preventDefault(); exitEditMode(true); }
+    if (e.key === 'Escape') { exitEditMode(false); }
+    e.stopPropagation();
+  });
+  input.addEventListener('pointerdown', e => e.stopPropagation());
+  input.addEventListener('blur', () => {
+    // Small delay so click on delete btn registers first
+    setTimeout(() => exitEditMode(true), 120);
+  });
 }
 
-function setActiveCard(id) {
-  if (activeCardId && activeCardId !== id) dismissActiveCard();
-  activeCardId = id;
-  document.querySelector(`.card[data-id="${id}"]`)?.classList.add('card--active');
-}
+function exitEditMode(save) {
+  if (!editingCardId) return;
+  const id = editingCardId;
+  editingCardId = null;
 
-function dismissActiveCard() {
-  if (!activeCardId) return;
-  document.querySelector(`.card[data-id="${activeCardId}"]`)?.classList.remove('card--active');
-  activeCardId = null;
+  const el = document.querySelector(`.card[data-id="${id}"]`);
+  if (!el) return;
+  el.classList.remove('card--editing');
+  el.querySelector('.card__delete-btn')?.classList.remove('visible');
+
+  const input = el.querySelector('.card__title-input');
+  if (input) {
+    if (save) updateCardTitle(id, input.value);
+    // Re-render just this card to restore proper title element
+    const cb = currentBoard();
+    const card = cb?.cards.find(c => c.id === id);
+    if (card) {
+      const compact = card.status === 'archive' || (card.status === 'done' && !doneExpanded);
+      const newEl = buildCardEl(card, compact);
+      el.replaceWith(newEl);
+    }
+  }
 }
 
 // ─── RENDER: TABS ─────────────────────────────────────────────────────────────
@@ -823,107 +858,116 @@ function buildCardEl(card, compact) {
   el.className = `card card--${card.status}`;
   el.dataset.id = card.id;
 
-  // Reorder buttons shown when card is active (tapped)
-  const reorderBtns = `
-    <div class="card__reorder-btns">
-      <button class="card__reorder-btn card__reorder-up"  title="Move up">↑</button>
-      <button class="card__reorder-btn card__reorder-down" title="Move down">↓</button>
-    </div>`;
-
   if (compact) {
     el.innerHTML = `
-      <div class="card__delete-btn" tabindex="-1">✕</div>
+      <button class="card__delete-btn" tabindex="-1" title="Delete">✕</button>
       <span class="card__title-compact">${esc(card.title)}</span>
       ${card.owner ? `<span class="card__owner-compact">${esc(card.owner)}</span>` : ''}
-      ${reorderBtns}
     `;
   } else {
     const dc = getDateCls(card.dueDate);
     el.innerHTML = `
-      <div class="card__delete-btn" tabindex="-1">✕</div>
+      <button class="card__delete-btn" tabindex="-1" title="Delete">✕</button>
       <h3 class="card__title">${esc(card.title)}</h3>
       <div class="card__meta">
-        ${card.owner ? `<span class="card__owner">${esc(card.owner)}</span>` : '<span></span>'}
+        ${card.owner  ? `<span class="card__owner">${esc(card.owner)}</span>` : '<span></span>'}
         ${card.dueDate ? `<span class="card__date ${dc}">${fmtDate(card.dueDate)}</span>` : ''}
       </div>
-      ${reorderBtns}
     `;
   }
 
-  if (card.id === deleteCardId) el.classList.add('delete-mode');
-  if (card.id === activeCardId)  el.classList.add('card--active');
   attachCardEvents(el);
   return el;
 }
 
-// ─── DRAG ────────────────────────────────────────────────────────────────────
+// ─── CARD EVENTS ─────────────────────────────────────────────────────────────
 function attachCardEvents(el) {
-  el.addEventListener('pointerdown', onCardDown, {passive:false});
-
-  el.querySelector('.card__delete-btn').addEventListener('pointerdown', e=>e.stopPropagation());
-  el.querySelector('.card__delete-btn').addEventListener('click', e => {
+  // Delete button — only fires when card is in editing mode
+  const deleteBtn = el.querySelector('.card__delete-btn');
+  deleteBtn.addEventListener('pointerdown', e => e.stopPropagation());
+  deleteBtn.addEventListener('click', e => {
     e.stopPropagation();
-    if (deleteCardId === el.dataset.id) deleteCard(el.dataset.id);
+    if (editingCardId === el.dataset.id) {
+      exitEditMode(false);
+      deleteCard(el.dataset.id);
+    }
   });
 
-  // Reorder buttons
-  el.querySelector('.card__reorder-up').addEventListener('pointerdown', e=>e.stopPropagation());
-  el.querySelector('.card__reorder-up').addEventListener('click', e => {
-    e.stopPropagation();
-    moveCardInZone(el.dataset.id, -1);
-  });
-  el.querySelector('.card__reorder-down').addEventListener('pointerdown', e=>e.stopPropagation());
-  el.querySelector('.card__reorder-down').addEventListener('click', e => {
-    e.stopPropagation();
-    moveCardInZone(el.dataset.id, +1);
-  });
+  el.addEventListener('pointerdown', onCardDown, { passive: false });
 }
 
 function onCardDown(e) {
-  if (e.target.closest('.card__delete-btn'))  return;
-  if (e.target.closest('.card__reorder-btns')) return;
-  const cardEl = e.currentTarget, id = cardEl.dataset.id;
-  if (deleteCardId && deleteCardId !== id) { dismissDelete(); return; }
-  if (deleteCardId === id) return;
-  // NOTE: no e.preventDefault() here — we let the browser decide scroll vs drag
-  // based on direction. pan-y is set on .card via CSS so vertical always scrolls.
+  if (e.target.closest('.card__delete-btn')) return;
+  if (e.target.closest('.card__title-input')) return;
+  const cardEl = e.currentTarget;
+  const id = cardEl.dataset.id;
+
+  // Exit editing on another card
+  if (editingCardId && editingCardId !== id) { exitEditMode(true); return; }
+  // If already editing this card, let events through
+  if (editingCardId === id) return;
+
+  // Double-tap / double-click detection
+  const now = Date.now();
+  if (lastTap.id === id && now - lastTap.time < DOUBLE_TAP_MS) {
+    lastTap = { id: null, time: 0 };
+    enterEditMode(id);
+    return;
+  }
+  lastTap = { id, time: now };
+
+  // Start drag tracking — don't prevent default yet (preserve scroll)
   cardEl.setPointerCapture(e.pointerId);
-  dragState = { cardId:id, startX:e.clientX, startY:e.clientY, dragging:false, cancelled:false, sourceEl:cardEl, currentZone:null, insertBefore:null };
-  startRing(e.clientX, e.clientY);
-  longPressTimer = setTimeout(() => activateDelete(id), LONG_PRESS_MS);
-  cardEl.addEventListener('pointermove', onCardMove);
-  cardEl.addEventListener('pointerup',   onCardUp);
-  cardEl.addEventListener('pointercancel', onCardUp);
+  dragState = {
+    cardId: id, startX: e.clientX, startY: e.clientY,
+    dragging: false, ready: false, cancelled: false,
+    holdTimer: null, sourceEl: cardEl, currentZone: null, insertBefore: null
+  };
+
+  // After DRAG_HOLD_MS, mark drag as ready (allows any-direction drag)
+  dragState.holdTimer = setTimeout(() => {
+    if (!dragState || dragState.cancelled) return;
+    dragState.ready = true;
+    cardEl.style.touchAction = 'none'; // block scroll now
+    cardEl.classList.add('drag-ready');
+  }, DRAG_HOLD_MS);
+
+  cardEl.addEventListener('pointermove',   onCardMove);
+  cardEl.addEventListener('pointerup',     onCardUp);
+  cardEl.addEventListener('pointercancel', onCardCancel);
 }
 
 function onCardMove(e) {
   if (!dragState || dragState.cancelled) return;
-  if (!dragState.dragging) {
-    const dx = Math.abs(e.clientX - dragState.startX);
-    const dy = Math.abs(e.clientY - dragState.startY);
-    const dist = Math.hypot(dx, dy);
-    if (dist < DRAG_THRESHOLD) return;
 
-    if (dy > dx) {
-      // Vertical intent → user is scrolling, cancel drag entirely
-      cancelLP();
+  const dx = Math.abs(e.clientX - dragState.startX);
+  const dy = Math.abs(e.clientY - dragState.startY);
+  const dist = Math.hypot(dx, dy);
+
+  if (!dragState.ready) {
+    // Before hold completes: if user moves clearly, it's a scroll — cancel
+    if (dist > DRAG_THRESHOLD) {
+      clearTimeout(dragState.holdTimer);
       dragState.cancelled = true;
       dragState.sourceEl.removeEventListener('pointermove', onCardMove);
       dragState.sourceEl.removeEventListener('pointerup',   onCardUp);
-      dragState.sourceEl.removeEventListener('pointercancel', onCardUp);
+      dragState.sourceEl.removeEventListener('pointercancel', onCardCancel);
       dragState = null;
-      return;
     }
+    return;
+  }
 
-    // Horizontal intent → it's a cross-column drag, take over from browser
+  // Drag is ready (hold completed) — any movement starts the drag
+  if (!dragState.dragging && dist > DRAG_THRESHOLD) {
     e.preventDefault();
-    cancelLP();
     dragState.dragging = true;
+    dragState.sourceEl.classList.remove('drag-ready');
     dragState.sourceEl.classList.add('dragging-source');
     document.body.classList.add('dragging-active');
     showGhost(dragState.cardId, e.clientX, e.clientY);
     ensureDropIndicator();
   }
+
   if (dragState.dragging) {
     e.preventDefault();
     moveGhost(e.clientX, e.clientY);
@@ -943,25 +987,34 @@ function onCardMove(e) {
 
 function onCardUp(e) {
   if (!dragState) return;
-  cancelLP();
+  clearTimeout(dragState.holdTimer);
   hideDropIndicator();
-  if (dragState.dragging && dragState.currentZone) {
-    // Drag completed — move/reorder
-    moveOrReorderCard(dragState.cardId, dragState.currentZone, dragState.insertBefore || null);
-  } else if (!dragState.dragging) {
-    // Tap (no movement) — toggle reorder buttons
-    const tappedId = dragState.cardId;
-    if (activeCardId === tappedId) {
-      dismissActiveCard();
-    } else {
-      setActiveCard(tappedId);
-    }
-  }
   const el = dragState.sourceEl;
-  el.classList.remove('dragging-source');
+  el.style.touchAction = '';
+  el.classList.remove('drag-ready', 'dragging-source');
+
+  if (dragState.dragging && dragState.currentZone) {
+    moveOrReorderCard(dragState.cardId, dragState.currentZone, dragState.insertBefore || null);
+  }
+
   el.removeEventListener('pointermove', onCardMove);
-  el.removeEventListener('pointerup', onCardUp);
-  el.removeEventListener('pointercancel', onCardUp);
+  el.removeEventListener('pointerup',   onCardUp);
+  el.removeEventListener('pointercancel', onCardCancel);
+  hideGhost(); clearZones();
+  document.body.classList.remove('dragging-active');
+  dragState = null;
+}
+
+function onCardCancel(e) {
+  if (!dragState) return;
+  clearTimeout(dragState.holdTimer);
+  hideDropIndicator();
+  const el = dragState.sourceEl;
+  el.style.touchAction = '';
+  el.classList.remove('drag-ready', 'dragging-source');
+  el.removeEventListener('pointermove', onCardMove);
+  el.removeEventListener('pointerup',   onCardUp);
+  el.removeEventListener('pointercancel', onCardCancel);
   hideGhost(); clearZones();
   document.body.classList.remove('dragging-active');
   dragState = null;
@@ -1038,32 +1091,11 @@ function hideDropIndicator() {
   if (dropIndicator) dropIndicator.style.display = 'none';
 }
 
-// Long press ring
-function startRing(x,y) {
-  const ring=q('#press-ring'), fill=q('#press-ring-fill');
-  ring.style.left=x+'px'; ring.style.top=y+'px'; ring.classList.remove('hidden');
-  fill.style.transition='none'; fill.style.strokeDashoffset='113.1';
-  requestAnimationFrame(()=>requestAnimationFrame(()=>{
-    fill.style.transition=`stroke-dashoffset ${LONG_PRESS_MS}ms linear`;
-    fill.style.strokeDashoffset='0';
-  }));
-}
-function hideRing() { const r=q('#press-ring'),f=q('#press-ring-fill'); r.classList.add('hidden'); f.style.transition='none'; f.style.strokeDashoffset='113.1'; }
-function cancelLP() { if(longPressTimer){clearTimeout(longPressTimer);longPressTimer=null;} hideRing(); }
-function activateDelete(id) { hideRing(); deleteCardId=id; longPressTimer=null; document.querySelector(`.card[data-id="${id}"]`)?.classList.add('delete-mode'); }
-function dismissDelete() { if(!deleteCardId)return; document.querySelector(`.card[data-id="${deleteCardId}"]`)?.classList.remove('delete-mode'); deleteCardId=null; }
-
+// Dismiss edit mode when tapping outside any card
 document.addEventListener('pointerdown', e => {
-  // Dismiss delete mode when tapping outside the delete-mode card
-  if (deleteCardId) {
-    const card = e.target.closest('.card');
-    if (!card || card.dataset.id !== deleteCardId) dismissDelete();
-  }
-  // Dismiss active (reorder) card when tapping outside it
-  if (activeCardId) {
-    const card = e.target.closest('.card');
-    if (!card || card.dataset.id !== activeCardId) dismissActiveCard();
-  }
+  if (!editingCardId) return;
+  const card = e.target.closest('.card');
+  if (!card || card.dataset.id !== editingCardId) exitEditMode(true);
 });
 
 // ─── SHELF EXPAND ─────────────────────────────────────────────────────────────
@@ -1183,43 +1215,55 @@ setInterval(spawnParticle, 3000);
 // ─── KEYBOARD ────────────────────────────────────────────────────────────────
 document.addEventListener('keydown', e=>{
   if (e.key==='Escape') {
+    if (editingCardId) { exitEditMode(false); return; }
     if (!q('#modal-overlay').classList.contains('hidden'))  { closeModal(); return; }
     if (!q('#help-overlay').classList.contains('hidden'))   { q('#help-overlay').classList.add('hidden'); return; }
-    dismissDelete();
   }
   if ((e.ctrlKey||e.metaKey) && e.key==='Enter') openModal();
 });
 
 // ─── CSS PATCHES ─────────────────────────────────────────────────────────────
-// style.css handles all Primer tokens; this patch only adds dynamic overrides
 (function injectStylePatches() {
   const style = document.createElement('style');
   style.textContent = `
     /* Bigger TaskBoards title */
-    .header__title {
-      font-size: clamp(1rem, 3.5vw, 1.25rem) !important;
-    }
+    .header__title { font-size: clamp(1rem, 3.5vw, 1.25rem) !important; }
 
     /* Board tabs — show full name, no truncation */
-    .board-tab {
-      flex-shrink: 0 !important;
-      max-width: none !important;
-    }
-    .board-tab__name {
-      overflow: visible !important;
-      text-overflow: unset !important;
-      white-space: nowrap !important;
-      max-width: none !important;
+    .board-tab { flex-shrink: 0 !important; max-width: none !important; }
+    .board-tab__name { overflow: visible !important; text-overflow: unset !important; white-space: nowrap !important; max-width: none !important; }
+
+    /* Done expanded full cards */
+    #done-bar.expanded #done-cards { display: flex !important; flex-direction: column !important; gap: 6px !important; padding: 8px 12px !important; }
+    #done-bar.expanded .card { opacity: .85; }
+
+    /* Drag-ready state: subtle lift before drag starts */
+    .card.drag-ready { transform: scale(1.02); box-shadow: var(--shadow-md); transition: transform .1s, box-shadow .1s; z-index: 10; }
+
+    /* Edit mode: title input */
+    .card__title-input {
+      width: 100%;
+      font: inherit;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text, #1f2328);
+      background: transparent;
+      border: none;
+      outline: none;
+      padding: 0;
+      margin: 0;
+      resize: none;
     }
 
-    /* Done section expanded — full card layout */
-    #done-bar.expanded #done-cards {
-      display: flex !important;
-      flex-direction: column !important;
-      gap: 6px !important;
-      padding: 8px 12px !important;
+    /* Edit mode: card outline + delete button always visible */
+    .card--editing {
+      outline: 2px solid var(--focus-outlineColor, #0969da) !important;
+      outline-offset: 1px;
     }
-    #done-bar.expanded .card { opacity: .85; }
+    .card--editing .card__delete-btn,
+    .card__delete-btn.visible {
+      display: flex !important;
+    }
   `;
   document.head.appendChild(style);
 })();
