@@ -1,7 +1,7 @@
 'use strict';
 
 // ─── VERSION ─────────────────────────────────────────────────────────────────
-const APP_VERSION = '2.6.0'; // dblclick edit + instant mouse drag
+const APP_VERSION = '2.6.1'; // fix syntax error
 console.log('%c TaskBoards v' + APP_VERSION + ' loaded', 'background:#0969da;color:#fff;padding:2px 8px;border-radius:4px;font-weight:bold');
 
 // ─── CONFIG & CONSTANTS ───────────────────────────────────────────────────────
@@ -572,6 +572,7 @@ function updateCardTitle(id, newTitle) {
   const t = newTitle.trim();
   if (t && t !== card.title) { card.title = t; onDataChanged(); }
 }
+function moveCard(id, newStatus) {
   moveOrReorderCard(id, newStatus, null);
 }
 
