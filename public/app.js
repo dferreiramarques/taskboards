@@ -1,7 +1,7 @@
 'use strict';
 
 // ─── VERSION ─────────────────────────────────────────────────────────────────
-const APP_VERSION = '2.6.2'; // fix syntax error
+const APP_VERSION = '2.6.3'; // fix syntax error
 console.log('%c TaskBoards v' + APP_VERSION + ' loaded', 'background:#0969da;color:#fff;padding:2px 8px;border-radius:4px;font-weight:bold');
 
 // ─── CONFIG & CONSTANTS ───────────────────────────────────────────────────────
@@ -1158,12 +1158,10 @@ document.addEventListener('pointerdown', e => {
 
 // ─── SHELF EXPAND ─────────────────────────────────────────────────────────────
 function updateFabPosition() {
-  const fab     = q('#fab');
   const doneBar = q('#done-bar');
-  if (!fab || !doneBar) return;
-  fab.style.bottom = doneExpanded
-    ? (16 + doneBar.offsetHeight) + 'px'
-    : '24px';
+  // Use scrollHeight so we get the full height including expanded content
+  const h = (doneExpanded && doneBar) ? doneBar.scrollHeight : 0;
+  document.documentElement.style.setProperty('--done-bar-h', h + 'px');
 }
 
 q('#archive-toggle').addEventListener('click', () => {
@@ -1175,8 +1173,8 @@ q('#done-toggle').addEventListener('click', () => {
   doneExpanded = !doneExpanded;
   q('#done-bar').classList.toggle('expanded', doneExpanded);
   renderBoard();
-  // Small delay so the DOM has updated height before measuring
-  requestAnimationFrame(updateFabPosition);
+  // Wait for renderBoard + browser layout before measuring height
+  setTimeout(updateFabPosition, 60);
 });
 
 // ─── CARD MODAL ───────────────────────────────────────────────────────────────
@@ -1338,23 +1336,39 @@ document.addEventListener('keydown', e=>{
     .owner-filter-chip:hover  { background: var(--bg-inset, #eaeef2); color: var(--text, #1f2328); }
     .owner-filter-chip.active { background: var(--accent-bg, #ddf4ff); border-color: var(--accent, #0969da); color: var(--accent, #0969da); font-weight: 600; }
 
-    /* 2. Board tab vertical alignment */
+    /* 2. Board tab row — align each item to center independently */
+    /* (works even if the row container isn't display:flex) */
     .tabs-row {
+      display: flex !important;
       align-items: center !important;
       min-height: 40px;
     }
     .board-tab {
-      height: 28px;
-      align-items: center;
-      display: flex;
+      display: inline-flex !important;
+      align-items: center !important;
+      align-self: center !important;
+      vertical-align: middle;
+      line-height: 1.2;
+      box-sizing: border-box;
     }
     #tab-prev, #tab-next, #add-board {
-      height: 28px;
-      align-self: center;
+      display: inline-flex !important;
+      align-items: center !important;
+      align-self: center !important;
+      vertical-align: middle;
+    }
+    /* Ensure boards-tabs row itself is centered */
+    #boards-tabs {
+      display: flex !important;
+      align-items: center !important;
+      align-self: center !important;
     }
 
-    /* 3. FAB transition for smooth movement */
-    #fab { transition: bottom .2s ease, opacity .15s, transform .12s; }
+    /* 3. FAB uses CSS variable for done-bar height — updated by JS */
+    #fab {
+      bottom: calc(24px + var(--done-bar-h, 0px)) !important;
+      transition: bottom .25s ease, opacity .15s, transform .12s !important;
+    }
 
     /* Done section title colour */
     #done-toggle { color: var(--done-fg, #8250df) !important; }
