@@ -1,7 +1,7 @@
 'use strict';
 
 // ─── VERSION ─────────────────────────────────────────────────────────────────
-const APP_VERSION = '2.5.0'; // double-tap edit + drag reorder
+const APP_VERSION = '2.6.0'; // dblclick edit + instant mouse drag
 console.log('%c TaskBoards v' + APP_VERSION + ' loaded', 'background:#0969da;color:#fff;padding:2px 8px;border-radius:4px;font-weight:bold');
 
 // ─── CONFIG & CONSTANTS ───────────────────────────────────────────────────────
@@ -882,7 +882,6 @@ function buildCardEl(card, compact) {
 
 // ─── CARD EVENTS ─────────────────────────────────────────────────────────────
 function attachCardEvents(el) {
-  // Delete button — only fires when card is in editing mode
   const deleteBtn = el.querySelector('.card__delete-btn');
   deleteBtn.addEventListener('pointerdown', e => e.stopPropagation());
   deleteBtn.addEventListener('click', e => {
@@ -893,71 +892,91 @@ function attachCardEvents(el) {
     }
   });
 
+  // Desktop: native dblclick is the most reliable way
+  el.addEventListener('dblclick', e => {
+    if (e.target.closest('.card__delete-btn')) return;
+    if (e.target.closest('.card__title-input')) return;
+    enterEditMode(el.dataset.id);
+  });
+
   el.addEventListener('pointerdown', onCardDown, { passive: false });
 }
 
 function onCardDown(e) {
-  if (e.target.closest('.card__delete-btn')) return;
+  if (e.target.closest('.card__delete-btn'))  return;
   if (e.target.closest('.card__title-input')) return;
   const cardEl = e.currentTarget;
   const id = cardEl.dataset.id;
 
-  // Exit editing on another card
+  // Exit edit mode if touching outside the editing card
   if (editingCardId && editingCardId !== id) { exitEditMode(true); return; }
-  // If already editing this card, let events through
   if (editingCardId === id) return;
 
-  // Double-tap / double-click detection
-  const now = Date.now();
-  if (lastTap.id === id && now - lastTap.time < DOUBLE_TAP_MS) {
-    lastTap = { id: null, time: 0 };
-    enterEditMode(id);
-    return;
+  // Touch: double-tap detection (mouse relies on native dblclick above)
+  if (e.pointerType === 'touch') {
+    const now = Date.now();
+    if (lastTap.id === id && now - lastTap.time < DOUBLE_TAP_MS) {
+      lastTap = { id: null, time: 0 };
+      e.preventDefault();
+      enterEditMode(id);
+      return;
+    }
+    lastTap = { id, time: now };
   }
-  lastTap = { id, time: now };
 
-  // Start drag tracking — don't prevent default yet (preserve scroll)
   cardEl.setPointerCapture(e.pointerId);
+
+  // For mouse: drag is immediately available (no hold needed)
+  // For touch: short hold (120ms) to distinguish from vertical scroll
+  const isTouch  = e.pointerType === 'touch';
+  const holdNeeded = isTouch ? 120 : 0;
+
   dragState = {
     cardId: id, startX: e.clientX, startY: e.clientY,
-    dragging: false, ready: false, cancelled: false,
-    holdTimer: null, sourceEl: cardEl, currentZone: null, insertBefore: null
+    dragging: false,
+    ready:    !isTouch,   // mouse is ready immediately
+    cancelled: false,
+    holdTimer: null,
+    sourceEl: cardEl,
+    currentZone: null, insertBefore: null
   };
 
-  // After DRAG_HOLD_MS, mark drag as ready (allows any-direction drag)
-  dragState.holdTimer = setTimeout(() => {
-    if (!dragState || dragState.cancelled) return;
-    dragState.ready = true;
-    cardEl.style.touchAction = 'none'; // block scroll now
-    cardEl.classList.add('drag-ready');
-  }, DRAG_HOLD_MS);
+  if (isTouch) {
+    dragState.holdTimer = setTimeout(() => {
+      if (!dragState || dragState.cancelled) return;
+      dragState.ready = true;
+      cardEl.style.touchAction = 'none';
+      cardEl.classList.add('drag-ready');
+    }, holdNeeded);
+  }
 
-  cardEl.addEventListener('pointermove',   onCardMove);
-  cardEl.addEventListener('pointerup',     onCardUp);
-  cardEl.addEventListener('pointercancel', onCardCancel);
+  cardEl.addEventListener('pointermove',    onCardMove);
+  cardEl.addEventListener('pointerup',      onCardUp);
+  cardEl.addEventListener('pointercancel',  onCardCancel);
 }
 
 function onCardMove(e) {
   if (!dragState || dragState.cancelled) return;
 
-  const dx = Math.abs(e.clientX - dragState.startX);
-  const dy = Math.abs(e.clientY - dragState.startY);
+  const dx   = Math.abs(e.clientX - dragState.startX);
+  const dy   = Math.abs(e.clientY - dragState.startY);
   const dist = Math.hypot(dx, dy);
 
+  // Touch + not yet ready: cancel drag if user moves (they're scrolling)
   if (!dragState.ready) {
-    // Before hold completes: if user moves clearly, it's a scroll — cancel
     if (dist > DRAG_THRESHOLD) {
       clearTimeout(dragState.holdTimer);
       dragState.cancelled = true;
-      dragState.sourceEl.removeEventListener('pointermove', onCardMove);
-      dragState.sourceEl.removeEventListener('pointerup',   onCardUp);
-      dragState.sourceEl.removeEventListener('pointercancel', onCardCancel);
+      const el = dragState.sourceEl;
+      el.removeEventListener('pointermove',   onCardMove);
+      el.removeEventListener('pointerup',     onCardUp);
+      el.removeEventListener('pointercancel', onCardCancel);
       dragState = null;
     }
     return;
   }
 
-  // Drag is ready (hold completed) — any movement starts the drag
+  // Ready — start dragging once threshold crossed
   if (!dragState.dragging && dist > DRAG_THRESHOLD) {
     e.preventDefault();
     dragState.dragging = true;
