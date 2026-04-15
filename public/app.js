@@ -1,7 +1,7 @@
 'use strict';
 
 // ─── VERSION ─────────────────────────────────────────────────────────────────
-const APP_VERSION = '2.6.1'; // fix syntax error
+const APP_VERSION = '2.6.2'; // fix syntax error
 console.log('%c TaskBoards v' + APP_VERSION + ' loaded', 'background:#0969da;color:#fff;padding:2px 8px;border-radius:4px;font-weight:bold');
 
 // ─── CONFIG & CONSTANTS ───────────────────────────────────────────────────────
@@ -39,10 +39,11 @@ let dynamicTabsPerPage = 4;
 let archiveExpanded = false;
 let doneExpanded    = false;
 let selectedColumn  = 'todo';
-let dragState       = null;   // { cardId, startX, startY, dragging, ready, holdTimer, sourceEl, currentZone, insertBefore }
-let editingCardId   = null;   // card currently in inline-edit mode
-let lastTap         = { id: null, time: 0 };   // double-tap detection
+let dragState       = null;
+let editingCardId   = null;
+let lastTap         = { id: null, time: 0 };
 let dropIndicator   = null;
+let selectedOwners  = new Set(); // owner filter
 
 // Auth state
 let gAccessToken   = null;
@@ -522,6 +523,7 @@ function switchBoard(id) {
   currentBoardId = id;
   archiveExpanded = false;
   doneExpanded    = false;
+  selectedOwners.clear();
   q('#archive-bar').classList.remove('expanded');
   q('#done-bar').classList.remove('expanded');
   onDataChanged();
@@ -829,23 +831,59 @@ function renderBoard() {
   const cards = currentCards();
   const zones = { todo:[], inprogress:[], archive:[], done:[] };
   cards.forEach(c => { if (zones[c.status]) zones[c.status].push(c); });
-  // Sort each zone by sortOrder (falls back to createdAt for legacy cards)
   Object.values(zones).forEach(z => z.sort((a,b) => (a.sortOrder ?? a.createdAt) - (b.sortOrder ?? b.createdAt)));
 
-  renderZone('todo-cards',       zones.todo,        false);
-  renderZone('inprogress-cards', zones.inprogress,  false);
-  renderZone('archive-cards',    zones.archive,      true);
-  renderZone('done-cards',       zones.done,         !doneExpanded); // full cards when expanded
+  // Apply owner filter (only to visible columns, not archive/done counts)
+  const filtered = selectedOwners.size > 0
+    ? z => z.filter(c => selectedOwners.has(c.owner?.trim() || ''))
+    : z => z;
 
-  q('#todo-count').textContent        = zones.todo.length;
-  q('#inprogress-count').textContent  = zones.inprogress.length;
-  q('#archive-count').textContent     = zones.archive.length;
-  q('#done-count').textContent        = zones.done.length;
+  renderZone('todo-cards',       filtered(zones.todo),       false);
+  renderZone('inprogress-cards', filtered(zones.inprogress), false);
+  renderZone('archive-cards',    zones.archive,               true);
+  renderZone('done-cards',       zones.done,                  !doneExpanded);
 
-  vis('#todo-empty',       zones.todo.length === 0);
-  vis('#inprogress-empty', zones.inprogress.length === 0);
+  q('#todo-count').textContent       = zones.todo.length;
+  q('#inprogress-count').textContent = zones.inprogress.length;
+  q('#archive-count').textContent    = zones.archive.length;
+  q('#done-count').textContent       = zones.done.length;
+
+  vis('#todo-empty',       filtered(zones.todo).length === 0);
+  vis('#inprogress-empty', filtered(zones.inprogress).length === 0);
   vis('#archive-empty',    zones.archive.length === 0);
   vis('#done-empty',       zones.done.length === 0);
+
+  renderOwnerFilterBar();
+}
+
+function renderOwnerFilterBar() {
+  const bar      = q('#owner-filter-bar');
+  const chipsEl  = q('#owner-filter-chips');
+  if (!bar || !chipsEl) return;
+
+  const owners = [...new Set(
+    currentCards().map(c => c.owner?.trim()).filter(Boolean)
+  )].sort((a, b) => a.localeCompare(b));
+
+  if (!owners.length) {
+    bar.style.display = 'none';
+    selectedOwners.clear();
+    return;
+  }
+
+  bar.style.display = 'flex';
+  chipsEl.innerHTML = '';
+  owners.forEach(owner => {
+    const chip = document.createElement('button');
+    chip.className = 'owner-filter-chip' + (selectedOwners.has(owner) ? ' active' : '');
+    chip.textContent = owner;
+    chip.addEventListener('click', () => {
+      if (selectedOwners.has(owner)) selectedOwners.delete(owner);
+      else selectedOwners.add(owner);
+      renderBoard(); // re-render with new filter (renderOwnerFilterBar called inside)
+    });
+    chipsEl.appendChild(chip);
+  });
 }
 
 function renderZone(containerId, zoneCards, compact) {
