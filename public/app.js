@@ -1,7 +1,7 @@
 'use strict';
 
 // ─── VERSION ─────────────────────────────────────────────────────────────────
-const APP_VERSION = '2.6.3'; // fix syntax error
+const APP_VERSION = '2.6.5'; // fix syntax error
 console.log('%c TaskBoards v' + APP_VERSION + ' loaded', 'background:#0969da;color:#fff;padding:2px 8px;border-radius:4px;font-weight:bold');
 
 // ─── CONFIG & CONSTANTS ───────────────────────────────────────────────────────
@@ -628,10 +628,15 @@ function enterEditMode(id) {
   input.className = 'card__title-input';
   input.value = card.title;
   input.maxLength = 120;
+  input.style.paddingRight = '30px'; // ensure input doesn't cover the delete button
   titleEl.replaceWith(input);
 
-  // Show delete button while editing
-  el.querySelector('.card__delete-btn')?.classList.add('visible');
+  // Force delete button visible with inline style (overrides all CSS)
+  const deleteBtn = el.querySelector('.card__delete-btn');
+  if (deleteBtn) {
+    deleteBtn.style.display = 'flex';
+    deleteBtn.style.zIndex  = '10';
+  }
 
   requestAnimationFrame(() => { input.focus(); input.select(); });
 
@@ -642,8 +647,8 @@ function enterEditMode(id) {
   });
   input.addEventListener('pointerdown', e => e.stopPropagation());
   input.addEventListener('blur', () => {
-    // Small delay so click on delete btn registers first
-    setTimeout(() => exitEditMode(true), 120);
+    // 300ms gives time for the delete button click to fire before we exit edit mode
+    setTimeout(() => exitEditMode(true), 300);
   });
 }
 
@@ -655,16 +660,17 @@ function exitEditMode(save) {
   const el = document.querySelector(`.card[data-id="${id}"]`);
   if (!el) return;
   el.classList.remove('card--editing');
+  const deleteBtn2 = el.querySelector('.card__delete-btn');
+  if (deleteBtn2) { deleteBtn2.style.display = ''; deleteBtn2.style.zIndex = ''; }
   el.querySelector('.card__delete-btn')?.classList.remove('visible');
 
   const input = el.querySelector('.card__title-input');
   if (input) {
     if (save) updateCardTitle(id, input.value);
-    // Re-render just this card to restore proper title element
     const cb = currentBoard();
     const card = cb?.cards.find(c => c.id === id);
     if (card) {
-      const compact = card.status === 'archive' || (card.status === 'done' && !doneExpanded);
+      const compact = card.status === 'archive' || card.status === 'done';
       const newEl = buildCardEl(card, compact);
       el.replaceWith(newEl);
     }
@@ -790,8 +796,8 @@ function renderTabs() {
   const multiPage = totalPages > 1;
   prevBtn.disabled = tabPage === 0;
   nextBtn.disabled = tabPage >= totalPages - 1;
-  prevBtn.style.visibility = multiPage ? '' : 'hidden';
-  nextBtn.style.visibility = multiPage ? '' : 'hidden';
+  prevBtn.style.display = multiPage ? '' : 'none';
+  nextBtn.style.display = multiPage ? '' : 'none';
 }
 
 function startRename(tab, boardId, nameEl) {
@@ -841,7 +847,7 @@ function renderBoard() {
   renderZone('todo-cards',       filtered(zones.todo),       false);
   renderZone('inprogress-cards', filtered(zones.inprogress), false);
   renderZone('archive-cards',    zones.archive,               true);
-  renderZone('done-cards',       zones.done,                  !doneExpanded);
+  renderZone('done-cards',       zones.done,                  true); // always compact like archive
 
   q('#todo-count').textContent       = zones.todo.length;
   q('#inprogress-count').textContent = zones.inprogress.length;
@@ -1301,86 +1307,64 @@ document.addEventListener('keydown', e=>{
 (function injectStylePatches() {
   const style = document.createElement('style');
   style.textContent = `
-    /* 1. Hide "Filter:" label — keep only the chips */
+    /* ── Global font scale 125% ── */
+    html { font-size: 17.5px; }
+
+    /* ── Owner filter bar ── */
     #owner-filter-bar .filter-label,
     #owner-filter-bar > span:first-child,
-    #owner-filter-bar > label {
-      display: none !important;
-    }
-    /* Owner filter bar — chips only, no label */
+    #owner-filter-bar > label { display: none !important; }
     #owner-filter-bar {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      padding: 4px 10px;
-      background: var(--bg, #fff);
-      border-bottom: 1px solid var(--border, #d1d9e0);
-      flex-wrap: wrap;
+      display: flex; align-items: center; gap: 6px;
+      padding: 4px 10px; background: var(--bg, #fff);
+      border-bottom: 1px solid var(--border, #d1d9e0); flex-wrap: wrap;
     }
-    #owner-filter-chips {
-      display: flex;
-      gap: 4px;
-      flex-wrap: wrap;
-    }
+    #owner-filter-chips { display: flex; gap: 4px; flex-wrap: wrap; }
     .owner-filter-chip {
-      padding: 2px 10px;
-      border: 1px solid var(--border, #d1d9e0);
-      border-radius: 2em;
-      background: var(--bg-muted, #f6f8fa);
-      font-size: 12px;
-      color: var(--text-muted, #59636e);
-      cursor: pointer;
-      transition: background .1s, border-color .1s, color .1s;
-      font-family: inherit;
+      padding: 2px 10px; border: 1px solid var(--border, #d1d9e0);
+      border-radius: 2em; background: var(--bg-muted, #f6f8fa);
+      font-size: .75rem; color: var(--text-muted, #59636e); cursor: pointer;
+      transition: background .1s, border-color .1s, color .1s; font-family: inherit;
     }
     .owner-filter-chip:hover  { background: var(--bg-inset, #eaeef2); color: var(--text, #1f2328); }
     .owner-filter-chip.active { background: var(--accent-bg, #ddf4ff); border-color: var(--accent, #0969da); color: var(--accent, #0969da); font-weight: 600; }
 
-    /* 2. Board tab row — align each item to center independently */
-    /* (works even if the row container isn't display:flex) */
-    .tabs-row {
-      display: flex !important;
-      align-items: center !important;
-      min-height: 40px;
-    }
-    .board-tab {
-      display: inline-flex !important;
-      align-items: center !important;
-      align-self: center !important;
-      vertical-align: middle;
-      line-height: 1.2;
-      box-sizing: border-box;
-    }
-    #tab-prev, #tab-next, #add-board {
-      display: inline-flex !important;
-      align-items: center !important;
-      align-self: center !important;
-      vertical-align: middle;
-    }
-    /* Ensure boards-tabs row itself is centered */
-    #boards-tabs {
-      display: flex !important;
-      align-items: center !important;
-      align-self: center !important;
-    }
+    /* ── Board tabs alignment ── */
+    .tabs-row { display: flex !important; align-items: center !important; min-height: 40px; }
+    .board-tab { display: inline-flex !important; align-items: center !important; align-self: center !important; }
+    #tab-prev, #tab-next, #add-board { display: inline-flex !important; align-items: center !important; align-self: center !important; }
+    #boards-tabs { display: flex !important; align-items: center !important; }
 
-    /* 3. FAB uses CSS variable for done-bar height — updated by JS */
+    /* ── FAB moves up with done bar ── */
     #fab {
       bottom: calc(24px + var(--done-bar-h, 0px)) !important;
       transition: bottom .25s ease, opacity .15s, transform .12s !important;
     }
 
-    /* Done section title colour */
-    #done-toggle { color: var(--done-fg, #8250df) !important; }
+    /* ── Delete button: ONLY visible in edit mode, NEVER on hover ── */
+    .card__delete-btn { display: none !important; }
+    .card--editing .card__delete-btn,
+    .card__delete-btn.visible { display: flex !important; z-index: 10; }
+    /* Remove any hover rule that might show it */
+    .card:hover .card__delete-btn { display: none !important; }
 
-    /* Done expanded — full cards */
-    #done-bar.expanded #done-cards { display: flex !important; flex-direction: column !important; gap: 6px !important; padding: 8px 12px !important; }
-    #done-bar.expanded .card { opacity: .85; }
-    #done-bar.expanded #done-cards .card { display: block !important; padding: 10px 12px !important; }
+    /* ── Done cards: same compact style as Archive ── */
+    #done-bar .card {
+      display: flex !important;
+      align-items: center !important;
+      gap: 8px !important;
+      padding: 6px 10px !important;
+      opacity: 1 !important;
+    }
+    #done-bar .card__title { padding-right: 0 !important; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1; }
+    #done-bar .card__meta  { display: none !important; }
+    #done-bar .card__title-compact { flex: 1; }
+    /* Done expanded container same as archive */
+    #done-cards { gap: 4px !important; padding: 0 12px 8px !important; max-height: 220px; overflow-y: auto; }
   `;
   document.head.appendChild(style);
 
-  // Also nuke "Filter:" text node if it's a bare text in the bar
+  // Nuke bare "Filter:" text node
   requestAnimationFrame(() => {
     const bar = document.querySelector('#owner-filter-bar');
     if (!bar) return;
