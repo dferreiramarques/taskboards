@@ -1,8 +1,8 @@
 'use strict';
 
 // ─── VERSION ─────────────────────────────────────────────────────────────────
-const APP_VERSION = '2.6.5'; // fix syntax error
-console.log('%c TaskBoards v' + APP_VERSION + ' loaded', 'background:#0969da;color:#fff;padding:2px 8px;border-radius:4px;font-weight:bold');
+const APP_VERSION = '3.1.0'; // smoother animations + 125% scale + FAB fix
+console.log('%c TaskBoards v' + APP_VERSION + ' loaded', 'background:#ffa300;color:#000;padding:2px 8px;border-radius:4px;font-weight:bold');
 
 // ─── CONFIG & CONSTANTS ───────────────────────────────────────────────────────
 const GOOGLE_CLIENT_ID  = (window.TASKBOARDS_CONFIG || {}).GOOGLE_CLIENT_ID || '';
@@ -26,24 +26,21 @@ function lsGet(key) {
 function lsSet(key, val) { localStorage.setItem(key, val); }
 function lsDel(key)      { localStorage.removeItem(key); }
 
-const DRAG_THRESHOLD  = 6;
-const DRAG_HOLD_MS    = 180;  // hold before drag activates — allows scroll on quick swipe
-const DOUBLE_TAP_MS   = 320;  // max gap between taps to count as double-tap
-const SAVE_DEBOUNCE   = 1800;
+const DRAG_THRESHOLD  = 5;
+const SAVE_DEBOUNCE   = 1800;  // ms after last change before Drive save
 
 // ─── STATE ───────────────────────────────────────────────────────────────────
-let boards         = [];
+let boards         = [];       // [{id, name, cards:[]}]
 let currentBoardId = null;
 let tabPage        = 0;
-let dynamicTabsPerPage = 4;
+let dynamicTabsPerPage = 4;   // computed dynamically based on available width
 let archiveExpanded = false;
 let doneExpanded    = false;
 let selectedColumn  = 'todo';
 let dragState       = null;
-let editingCardId   = null;
-let lastTap         = { id: null, time: 0 };
-let dropIndicator   = null;
-let selectedOwners  = new Set(); // owner filter
+let deleteCardId    = null;
+let dropIndicator   = null;   // the insertion line element
+let selectedOwners  = new Set(); // for filtering cards by owner
 
 // Auth state
 let gAccessToken   = null;
@@ -64,6 +61,25 @@ const getDateCls = ds => {
   const diff = (new Date(ds+'T00:00:00') - now) / 86400000;
   return diff < 0 ? 'overdue' : diff <= 3 ? 'soon' : '';
 };
+
+// ─── TOAST NOTIFICATIONS ─────────────────────────────────────────────────────
+const TOAST_DURATION = 2500;
+function showToast(message, type = 'success') {
+  const container = q('#toast-container');
+  const toast = document.createElement('div');
+  toast.className = `toast toast--${type}`;
+  
+  const icons = { success: '✓', error: '✕', info: '◈', loading: '◐' };
+  toast.innerHTML = `<span class="toast__icon">${icons[type] || icons.success}</span><span class="toast__message">${esc(message)}</span>`;
+  
+  container.appendChild(toast);
+  requestAnimationFrame(() => toast.classList.add('toast--visible'));
+  
+  setTimeout(() => {
+    toast.classList.remove('toast--visible');
+    toast.addEventListener('transitionend', () => toast.remove(), { once: true });
+  }, TOAST_DURATION);
+}
 
 // ─── BOARD HELPERS ────────────────────────────────────────────────────────────
 function currentBoard() { return boards.find(b => b.id === currentBoardId) || boards[0]; }
@@ -154,6 +170,83 @@ function refreshOwnerUI() {
   });
 }
 
+// ─── OWNER FILTER ────────────────────────────────────────────────────────────
+const LS_FILTER_OWNERS = 'taskboards-v1-filter-owners';
+
+function loadSelectedOwners() {
+  try {
+    const saved = localStorage.getItem(LS_FILTER_OWNERS);
+    if (saved) {
+      return new Set(JSON.parse(saved));
+    }
+  } catch {}
+  return new Set();
+}
+
+function saveSelectedOwners() {
+  localStorage.setItem(LS_FILTER_OWNERS, JSON.stringify([...selectedOwners]));
+}
+
+function toggleOwnerFilter(ownerName) {
+  if (selectedOwners.has(ownerName)) {
+    selectedOwners.delete(ownerName);
+  } else {
+    selectedOwners.add(ownerName);
+  }
+  saveSelectedOwners();
+  renderOwnerFilterChips();
+  renderBoard();
+}
+
+function clearOwnerFilter() {
+  selectedOwners.clear();
+  saveSelectedOwners();
+  renderOwnerFilterChips();
+  renderBoard();
+}
+
+function isCardVisible(card) {
+  if (selectedOwners.size === 0) return true;
+  if (!card.owner?.trim()) return false;
+  return selectedOwners.has(card.owner.trim());
+}
+
+function renderOwnerFilterChips() {
+  const container = q('#owner-filter-chips');
+  const bar = q('#owner-filter-bar');
+  if (!container) return;
+  
+  const owners = activeOwners();
+  if (owners.length === 0) {
+    bar?.classList.remove('has-owners');
+    return;
+  }
+  
+  bar?.classList.add('has-owners');
+  container.innerHTML = '';
+  
+  owners.forEach(name => {
+    const chip = document.createElement('button');
+    chip.type = 'button';
+    chip.className = 'owner-filter-chip' + (selectedOwners.has(name) ? ' active' : '');
+    chip.textContent = name;
+    chip.title = selectedOwners.has(name) ? 'Click to remove filter' : 'Click to filter by owner';
+    chip.addEventListener('click', () => toggleOwnerFilter(name));
+    container.appendChild(chip);
+  });
+  
+  // Add clear button if any filter is active
+  if (selectedOwners.size > 0) {
+    const clearBtn = document.createElement('button');
+    clearBtn.type = 'button';
+    clearBtn.className = 'owner-filter-clear';
+    clearBtn.textContent = '✕';
+    clearBtn.title = 'Clear all filters';
+    clearBtn.addEventListener('click', clearOwnerFilter);
+    container.appendChild(clearBtn);
+  }
+}
+
 // ─── GOOGLE DRIVE ────────────────────────────────────────────────────────────
 function driveHeaders(contentType = 'application/json') {
   return { 'Authorization': `Bearer ${gAccessToken}`, 'Content-Type': contentType };
@@ -177,6 +270,7 @@ async function driveFindFile() {
 
 async function driveLoadData() {
   setSyncStatus('syncing', 'Loading from Drive…');
+  showSkeleton(true);
   try {
     // Always search by name — never use a potentially stale/undefined cached ID
     const fid = await driveFindFile();
@@ -185,6 +279,8 @@ async function driveLoadData() {
       setSyncStatus('synced', 'Drive ready');
       driveFileId = null;
       lsDel(LS_DRIVE_FID);
+      showSkeleton(false);
+      showToast('Ready to save to Drive', 'info');
       return null;
     }
     driveFileId = fid;
@@ -204,10 +300,14 @@ async function driveLoadData() {
     const data = await r.json();
     console.log('driveLoadData success — boards:', data.boards?.length, 'savedAt:', data.savedAt ? new Date(data.savedAt).toLocaleString() : 'unknown');
     setSyncStatus('synced', 'Loaded from Drive ✓');
+    showSkeleton(false);
+    showToast(`Loaded ${data.boards?.length || 0} boards`, 'success');
     return data;
   } catch (err) {
     console.error('driveLoadData error:', err.message);
     setSyncStatus('error', `Load failed — ${err.message}`);
+    showSkeleton(false);
+    showToast('Failed to load from Drive', 'error');
     return null;
   }
 }
@@ -333,6 +433,7 @@ async function driveSaveData() {
       driveFileId = res.id;
       lsSet(LS_DRIVE_FID, driveFileId);
       setSyncStatus('synced', 'Saved to Drive ✓');
+      showToast('Saved to Drive', 'success');
       return;
     }
 
@@ -354,6 +455,7 @@ async function driveSaveData() {
   } catch (err) {
     console.error('Drive save error:', err.message);
     setSyncStatus('error', `Save failed — ${err.message}`);
+    showToast('Save failed', 'error');
   }
 }
 
@@ -366,6 +468,27 @@ function setSyncStatus(state, label) {
   const dot = q('#sync-dot'), lbl = q('#sync-label');
   if (dot) { dot.className = 'sync-dot ' + state; }
   if (lbl) lbl.textContent = label;
+}
+
+// ─── SKELETON LOADING ────────────────────────────────────────────────────────
+function showSkeleton(show) {
+  const skeleton = q('#skeleton-loader');
+  if (skeleton) {
+    skeleton.classList.toggle('skeleton--visible', show);
+  }
+}
+
+function createSkeletonLoader() {
+  const skeleton = document.createElement('div');
+  skeleton.id = 'skeleton-loader';
+  skeleton.className = 'skeleton-loader';
+  skeleton.innerHTML = `
+    <div class="skeleton-card"></div>
+    <div class="skeleton-card skeleton-card--short"></div>
+    <div class="skeleton-card"></div>
+    <div class="skeleton-card skeleton-card--medium"></div>
+  `;
+  document.body.appendChild(skeleton);
 }
 
 // ─── GOOGLE IDENTITY SERVICES ────────────────────────────────────────────────
@@ -505,6 +628,7 @@ function addBoard() {
   tabPage = Math.floor((boards.length - 1) / dynamicTabsPerPage);
   onDataChanged();
   renderTabs();
+  renderOwnerFilterChips();
   renderBoard();
 }
 
@@ -523,11 +647,11 @@ function switchBoard(id) {
   currentBoardId = id;
   archiveExpanded = false;
   doneExpanded    = false;
-  selectedOwners.clear();
   q('#archive-bar').classList.remove('expanded');
   q('#done-bar').classList.remove('expanded');
   onDataChanged();
   renderTabs();
+  renderOwnerFilterChips();
   renderBoard();
 }
 
@@ -543,21 +667,27 @@ function createCard(title, owner, dueDate, status) {
   const card = { id: uid(), title: title.trim(), owner: owner.trim(), dueDate, status, createdAt: Date.now(), sortOrder: maxOrder + 1 };
   currentBoard().cards.push(card);
   onDataChanged();
+  renderOwnerFilterChips();
   renderBoard();
   requestAnimationFrame(() => {
     const el = document.querySelector(`.card[data-id="${card.id}"]`);
     if (el) { el.classList.add('card--entering'); el.addEventListener('animationend', () => el.classList.remove('card--entering'), {once:true}); }
   });
+  showToast(`Card "${title.trim().slice(0, 20)}${title.length > 20 ? '...' : ''}" created`, 'success');
 }
 
 function deleteCard(id) {
   const el = document.querySelector(`.card[data-id="${id}"]`);
+  const card = currentBoard()?.cards.find(c => c.id === id);
+  const cardTitle = card?.title || 'Card';
   const doDelete = () => {
     const cb = currentBoard();
     if (cb) cb.cards = cb.cards.filter(c => c.id !== id);
     deleteCardId = null;
     onDataChanged();
+    renderOwnerFilterChips();
     renderBoard();
+    showToast('Card deleted', 'info');
   };
   if (el) {
     el.style.transition = 'transform .2s ease, opacity .2s ease';
@@ -567,13 +697,6 @@ function deleteCard(id) {
   } else doDelete();
 }
 
-function updateCardTitle(id, newTitle) {
-  const cb = currentBoard();
-  const card = cb?.cards.find(c => c.id === id);
-  if (!card) return;
-  const t = newTitle.trim();
-  if (t && t !== card.title) { card.title = t; onDataChanged(); }
-}
 function moveCard(id, newStatus) {
   moveOrReorderCard(id, newStatus, null);
 }
@@ -583,6 +706,7 @@ function moveOrReorderCard(id, newStatus, insertBeforeId) {
   const card = cb?.cards.find(c => c.id === id);
   if (!card) return;
   const wasStatus = card.status;
+  const cardTitle = card.title || 'Card';
 
   // Update status
   card.status = newStatus;
@@ -605,75 +729,9 @@ function moveOrReorderCard(id, newStatus, insertBeforeId) {
 
   onDataChanged();
   renderBoard();
-  if (newStatus === 'done' && wasStatus !== 'done') setTimeout(launchConfetti, 80);
-}
-
-// ─── INLINE EDIT MODE ────────────────────────────────────────────────────────
-function enterEditMode(id) {
-  if (editingCardId === id) return;
-  exitEditMode(true); // save any previous edit first
-
-  editingCardId = id;
-  const el = document.querySelector(`.card[data-id="${id}"]`);
-  if (!el) return;
-  el.classList.add('card--editing');
-
-  // Replace title element with an input
-  const titleEl = el.querySelector('.card__title, .card__title-compact');
-  if (!titleEl) return;
-  const card = currentCards().find(c => c.id === id);
-  if (!card) return;
-
-  const input = document.createElement('input');
-  input.className = 'card__title-input';
-  input.value = card.title;
-  input.maxLength = 120;
-  input.style.paddingRight = '30px'; // ensure input doesn't cover the delete button
-  titleEl.replaceWith(input);
-
-  // Force delete button visible with inline style (overrides all CSS)
-  const deleteBtn = el.querySelector('.card__delete-btn');
-  if (deleteBtn) {
-    deleteBtn.style.display = 'flex';
-    deleteBtn.style.zIndex  = '10';
-  }
-
-  requestAnimationFrame(() => { input.focus(); input.select(); });
-
-  input.addEventListener('keydown', e => {
-    if (e.key === 'Enter')  { e.preventDefault(); exitEditMode(true); }
-    if (e.key === 'Escape') { exitEditMode(false); }
-    e.stopPropagation();
-  });
-  input.addEventListener('pointerdown', e => e.stopPropagation());
-  input.addEventListener('blur', () => {
-    // 300ms gives time for the delete button click to fire before we exit edit mode
-    setTimeout(() => exitEditMode(true), 300);
-  });
-}
-
-function exitEditMode(save) {
-  if (!editingCardId) return;
-  const id = editingCardId;
-  editingCardId = null;
-
-  const el = document.querySelector(`.card[data-id="${id}"]`);
-  if (!el) return;
-  el.classList.remove('card--editing');
-  const deleteBtn2 = el.querySelector('.card__delete-btn');
-  if (deleteBtn2) { deleteBtn2.style.display = ''; deleteBtn2.style.zIndex = ''; }
-  el.querySelector('.card__delete-btn')?.classList.remove('visible');
-
-  const input = el.querySelector('.card__title-input');
-  if (input) {
-    if (save) updateCardTitle(id, input.value);
-    const cb = currentBoard();
-    const card = cb?.cards.find(c => c.id === id);
-    if (card) {
-      const compact = card.status === 'archive' || card.status === 'done';
-      const newEl = buildCardEl(card, compact);
-      el.replaceWith(newEl);
-    }
+  if (newStatus === 'done' && wasStatus !== 'done') {
+    setTimeout(launchConfetti, 80);
+    showToast(`"${cardTitle.slice(0, 25)}${cardTitle.length > 25 ? '...' : ''}" completed! 🎉`, 'success');
   }
 }
 
@@ -796,8 +854,8 @@ function renderTabs() {
   const multiPage = totalPages > 1;
   prevBtn.disabled = tabPage === 0;
   nextBtn.disabled = tabPage >= totalPages - 1;
-  prevBtn.style.display = multiPage ? '' : 'none';
-  nextBtn.style.display = multiPage ? '' : 'none';
+  prevBtn.style.visibility = multiPage ? '' : 'hidden';
+  nextBtn.style.visibility = multiPage ? '' : 'hidden';
 }
 
 function startRename(tab, boardId, nameEl) {
@@ -836,60 +894,45 @@ window.addEventListener('resize', () => { clearTimeout(_resizeTimer); _resizeTim
 function renderBoard() {
   const cards = currentCards();
   const zones = { todo:[], inprogress:[], archive:[], done:[] };
-  cards.forEach(c => { if (zones[c.status]) zones[c.status].push(c); });
+  const zoneCounts = { todo:0, inprogress:0, archive:0, done:0 };
+  
+  cards.forEach(c => { 
+    if (zones[c.status]) {
+      zones[c.status].push(c);
+      zoneCounts[c.status]++;
+    }
+  });
+  
+  // Sort each zone by sortOrder (falls back to createdAt for legacy cards)
   Object.values(zones).forEach(z => z.sort((a,b) => (a.sortOrder ?? a.createdAt) - (b.sortOrder ?? b.createdAt)));
 
-  // Apply owner filter (only to visible columns, not archive/done counts)
-  const filtered = selectedOwners.size > 0
-    ? z => z.filter(c => selectedOwners.has(c.owner?.trim() || ''))
-    : z => z;
-
-  renderZone('todo-cards',       filtered(zones.todo),       false);
-  renderZone('inprogress-cards', filtered(zones.inprogress), false);
-  renderZone('archive-cards',    zones.archive,               true);
-  renderZone('done-cards',       zones.done,                  true); // always compact like archive
-
-  q('#todo-count').textContent       = zones.todo.length;
-  q('#inprogress-count').textContent = zones.inprogress.length;
-  q('#archive-count').textContent    = zones.archive.length;
-  q('#done-count').textContent       = zones.done.length;
-
-  vis('#todo-empty',       filtered(zones.todo).length === 0);
-  vis('#inprogress-empty', filtered(zones.inprogress).length === 0);
-  vis('#archive-empty',    zones.archive.length === 0);
-  vis('#done-empty',       zones.done.length === 0);
-
-  renderOwnerFilterBar();
-}
-
-function renderOwnerFilterBar() {
-  const bar      = q('#owner-filter-bar');
-  const chipsEl  = q('#owner-filter-chips');
-  if (!bar || !chipsEl) return;
-
-  const owners = [...new Set(
-    currentCards().map(c => c.owner?.trim()).filter(Boolean)
-  )].sort((a, b) => a.localeCompare(b));
-
-  if (!owners.length) {
-    bar.style.display = 'none';
-    selectedOwners.clear();
-    return;
-  }
-
-  bar.style.display = 'flex';
-  chipsEl.innerHTML = '';
-  owners.forEach(owner => {
-    const chip = document.createElement('button');
-    chip.className = 'owner-filter-chip' + (selectedOwners.has(owner) ? ' active' : '');
-    chip.textContent = owner;
-    chip.addEventListener('click', () => {
-      if (selectedOwners.has(owner)) selectedOwners.delete(owner);
-      else selectedOwners.add(owner);
-      renderBoard(); // re-render with new filter (renderOwnerFilterBar called inside)
-    });
-    chipsEl.appendChild(chip);
+  // Filter cards by owner if filter is active
+  const filteredZones = {};
+  const filteredCounts = { todo:0, inprogress:0, archive:0, done:0 };
+  
+  Object.entries(zones).forEach(([status, zoneCards]) => {
+    filteredZones[status] = zoneCards.filter(card => isCardVisible(card));
+    filteredCounts[status] = filteredZones[status].length;
   });
+
+  renderZone('todo-cards',       filteredZones.todo,        false);
+  renderZone('inprogress-cards', filteredZones.inprogress,  false);
+  renderZone('archive-cards',    filteredZones.archive,      true);
+  renderZone('done-cards',       filteredZones.done,         !doneExpanded);
+
+  // Update counts: show filtered/total
+  const hasFilter = selectedOwners.size > 0;
+  const fmtCount = (filtered, total) => hasFilter ? `${filtered}/${total}` : String(filtered);
+  
+  q('#todo-count').textContent        = fmtCount(filteredCounts.todo, zoneCounts.todo);
+  q('#inprogress-count').textContent  = fmtCount(filteredCounts.inprogress, zoneCounts.inprogress);
+  q('#archive-count').textContent     = fmtCount(filteredCounts.archive, zoneCounts.archive);
+  q('#done-count').textContent        = fmtCount(filteredCounts.done, zoneCounts.done);
+
+  vis('#todo-empty',       filteredCounts.todo === 0);
+  vis('#inprogress-empty', filteredCounts.inprogress === 0);
+  vis('#archive-empty',    filteredCounts.archive === 0);
+  vis('#done-empty',       filteredCounts.done === 0);
 }
 
 function renderZone(containerId, zoneCards, compact) {
@@ -902,146 +945,94 @@ function buildCardEl(card, compact) {
   const el = document.createElement('div');
   el.className = `card card--${card.status}`;
   el.dataset.id = card.id;
-
   if (compact) {
     el.innerHTML = `
-      <button class="card__delete-btn" tabindex="-1" title="Delete">✕</button>
+      <div class="card__delete-btn" tabindex="-1">✕</div>
       <span class="card__title-compact">${esc(card.title)}</span>
       ${card.owner ? `<span class="card__owner-compact">${esc(card.owner)}</span>` : ''}
     `;
   } else {
     const dc = getDateCls(card.dueDate);
     el.innerHTML = `
-      <button class="card__delete-btn" tabindex="-1" title="Delete">✕</button>
+      <div class="card__delete-btn" tabindex="-1">✕</div>
       <h3 class="card__title">${esc(card.title)}</h3>
       <div class="card__meta">
-        ${card.owner  ? `<span class="card__owner">${esc(card.owner)}</span>` : '<span></span>'}
+        ${card.owner ? `<span class="card__owner">${esc(card.owner)}</span>` : '<span></span>'}
         ${card.dueDate ? `<span class="card__date ${dc}">${fmtDate(card.dueDate)}</span>` : ''}
       </div>
     `;
   }
 
+  if (card.id === deleteCardId) el.classList.add('delete-mode');
   attachCardEvents(el);
   return el;
 }
 
-// ─── CARD EVENTS ─────────────────────────────────────────────────────────────
+// ─── DRAG ────────────────────────────────────────────────────────────────────
 function attachCardEvents(el) {
-  const deleteBtn = el.querySelector('.card__delete-btn');
-  deleteBtn.addEventListener('pointerdown', e => e.stopPropagation());
-  deleteBtn.addEventListener('click', e => {
+  el.addEventListener('pointerdown', onCardDown, {passive:false});
+  el.addEventListener('dblclick', onCardDblClick);
+
+  el.querySelector('.card__delete-btn').addEventListener('pointerdown', e=>e.stopPropagation());
+  el.querySelector('.card__delete-btn').addEventListener('click', e => {
     e.stopPropagation();
-    if (editingCardId === el.dataset.id) {
-      exitEditMode(false);
-      deleteCard(el.dataset.id);
-    }
+    if (deleteCardId === el.dataset.id) deleteCard(el.dataset.id);
   });
+}
 
-  // Desktop: native dblclick is the most reliable way
-  el.addEventListener('dblclick', e => {
-    if (e.target.closest('.card__delete-btn')) return;
-    if (e.target.closest('.card__title-input')) return;
-    enterEditMode(el.dataset.id);
-  });
-
-  el.addEventListener('pointerdown', onCardDown, { passive: false });
+function onCardDblClick(e) {
+  if (e.target.closest('.card__delete-btn')) return;
+  const cardEl = e.currentTarget;
+  const id = cardEl.dataset.id;
+  
+  if (deleteCardId === id) {
+    deleteCard(id);
+  } else {
+    if (deleteCardId) dismissDelete();
+    activateDelete(id);
+  }
 }
 
 function onCardDown(e) {
   if (e.target.closest('.card__delete-btn'))  return;
-  if (e.target.closest('.card__title-input')) return;
-  const cardEl = e.currentTarget;
-  const id = cardEl.dataset.id;
-
-  // Exit edit mode if touching outside the editing card
-  if (editingCardId && editingCardId !== id) { exitEditMode(true); return; }
-  if (editingCardId === id) return;
-
-  // Touch: double-tap detection (mouse relies on native dblclick above)
-  if (e.pointerType === 'touch') {
-    const now = Date.now();
-    if (lastTap.id === id && now - lastTap.time < DOUBLE_TAP_MS) {
-      lastTap = { id: null, time: 0 };
-      e.preventDefault();
-      enterEditMode(id);
-      return;
-    }
-    lastTap = { id, time: now };
-  }
-
+  const cardEl = e.currentTarget, id = cardEl.dataset.id;
+  if (deleteCardId && deleteCardId !== id) { dismissDelete(); return; }
+  if (deleteCardId === id) return;
   cardEl.setPointerCapture(e.pointerId);
-
-  // For mouse: drag is immediately available (no hold needed)
-  // For touch: short hold (120ms) to distinguish from vertical scroll
-  const isTouch  = e.pointerType === 'touch';
-  const holdNeeded = isTouch ? 120 : 0;
-
-  dragState = {
-    cardId: id, startX: e.clientX, startY: e.clientY,
-    dragging: false,
-    ready:    !isTouch,   // mouse is ready immediately
-    cancelled: false,
-    holdTimer: null,
-    sourceEl: cardEl,
-    currentZone: null, insertBefore: null
-  };
-
-  if (isTouch) {
-    dragState.holdTimer = setTimeout(() => {
-      if (!dragState || dragState.cancelled) return;
-      dragState.ready = true;
-      cardEl.style.touchAction = 'none';
-      cardEl.classList.add('drag-ready');
-    }, holdNeeded);
-  }
-
-  cardEl.addEventListener('pointermove',    onCardMove);
-  cardEl.addEventListener('pointerup',      onCardUp);
-  cardEl.addEventListener('pointercancel',  onCardCancel);
+  const sourceZone = cardEl.closest('[data-zone]')?.dataset.zone || 'todo';
+  dragState = { cardId:id, startX:e.clientX, startY:e.clientY, dragging:false, cancelled:false, sourceEl:cardEl, currentZone:null, insertBefore:null, sourceZone };
+  cardEl.addEventListener('pointermove', onCardMove);
+  cardEl.addEventListener('pointerup',   onCardUp);
+  cardEl.addEventListener('pointercancel', onCardUp);
 }
 
 function onCardMove(e) {
   if (!dragState || dragState.cancelled) return;
+  if (!dragState.dragging) {
+    const dx = e.clientX - dragState.startX;
+    const dy = e.clientY - dragState.startY;
+    const dist = Math.hypot(dx, dy);
+    if (dist < DRAG_THRESHOLD) return;
 
-  const dx   = Math.abs(e.clientX - dragState.startX);
-  const dy   = Math.abs(e.clientY - dragState.startY);
-  const dist = Math.hypot(dx, dy);
-
-  // Touch + not yet ready: cancel drag if user moves (they're scrolling)
-  if (!dragState.ready) {
-    if (dist > DRAG_THRESHOLD) {
-      clearTimeout(dragState.holdTimer);
-      dragState.cancelled = true;
-      const el = dragState.sourceEl;
-      el.removeEventListener('pointermove',   onCardMove);
-      el.removeEventListener('pointerup',     onCardUp);
-      el.removeEventListener('pointercancel', onCardCancel);
-      dragState = null;
-    }
-    return;
-  }
-
-  // Ready — start dragging once threshold crossed
-  if (!dragState.dragging && dist > DRAG_THRESHOLD) {
+    // Start drag in any direction
     e.preventDefault();
     dragState.dragging = true;
-    dragState.sourceEl.classList.remove('drag-ready');
     dragState.sourceEl.classList.add('dragging-source');
     document.body.classList.add('dragging-active');
     showGhost(dragState.cardId, e.clientX, e.clientY);
     ensureDropIndicator();
   }
-
   if (dragState.dragging) {
     e.preventDefault();
     moveGhost(e.clientX, e.clientY);
     const z = detectZone(e.clientX, e.clientY);
-    highlightZone(z);
-    dragState.currentZone = z;
-    if (z) {
-      const { insertBefore, refEl } = detectInsertPosition(z, e.clientX, e.clientY, dragState.cardId);
+    const targetZone = z || dragState.sourceZone;
+    highlightZone(targetZone);
+    dragState.currentZone = targetZone;
+    if (targetZone) {
+      const { insertBefore, refEl } = detectInsertPosition(targetZone, e.clientX, e.clientY, dragState.cardId);
       dragState.insertBefore = insertBefore;
-      showDropIndicator(z, refEl);
+      showDropIndicator(targetZone, refEl);
     } else {
       hideDropIndicator();
       dragState.insertBefore = null;
@@ -1051,34 +1042,15 @@ function onCardMove(e) {
 
 function onCardUp(e) {
   if (!dragState) return;
-  clearTimeout(dragState.holdTimer);
   hideDropIndicator();
-  const el = dragState.sourceEl;
-  el.style.touchAction = '';
-  el.classList.remove('drag-ready', 'dragging-source');
-
   if (dragState.dragging && dragState.currentZone) {
     moveOrReorderCard(dragState.cardId, dragState.currentZone, dragState.insertBefore || null);
   }
-
-  el.removeEventListener('pointermove', onCardMove);
-  el.removeEventListener('pointerup',   onCardUp);
-  el.removeEventListener('pointercancel', onCardCancel);
-  hideGhost(); clearZones();
-  document.body.classList.remove('dragging-active');
-  dragState = null;
-}
-
-function onCardCancel(e) {
-  if (!dragState) return;
-  clearTimeout(dragState.holdTimer);
-  hideDropIndicator();
   const el = dragState.sourceEl;
-  el.style.touchAction = '';
-  el.classList.remove('drag-ready', 'dragging-source');
+  el.classList.remove('dragging-source');
   el.removeEventListener('pointermove', onCardMove);
-  el.removeEventListener('pointerup',   onCardUp);
-  el.removeEventListener('pointercancel', onCardCancel);
+  el.removeEventListener('pointerup', onCardUp);
+  el.removeEventListener('pointercancel', onCardUp);
   hideGhost(); clearZones();
   document.body.classList.remove('dragging-active');
   dragState = null;
@@ -1155,33 +1127,27 @@ function hideDropIndicator() {
   if (dropIndicator) dropIndicator.style.display = 'none';
 }
 
-// Dismiss edit mode when tapping outside any card
+function activateDelete(id) { 
+  deleteCardId=id; 
+  document.querySelector(`.card[data-id="${id}"]`)?.classList.add('delete-mode'); 
+}
+
+function dismissDelete() { 
+  if(!deleteCardId)return; 
+  document.querySelector(`.card[data-id="${deleteCardId}"]`)?.classList.remove('delete-mode'); 
+  deleteCardId=null; 
+}
+
 document.addEventListener('pointerdown', e => {
-  if (!editingCardId) return;
-  const card = e.target.closest('.card');
-  if (!card || card.dataset.id !== editingCardId) exitEditMode(true);
+  if (deleteCardId) {
+    const card = e.target.closest('.card');
+    if (!card || card.dataset.id !== deleteCardId) dismissDelete();
+  }
 });
 
 // ─── SHELF EXPAND ─────────────────────────────────────────────────────────────
-function updateFabPosition() {
-  const doneBar = q('#done-bar');
-  // Use scrollHeight so we get the full height including expanded content
-  const h = (doneExpanded && doneBar) ? doneBar.scrollHeight : 0;
-  document.documentElement.style.setProperty('--done-bar-h', h + 'px');
-}
-
-q('#archive-toggle').addEventListener('click', () => {
-  archiveExpanded = !archiveExpanded;
-  q('#archive-bar').classList.toggle('expanded', archiveExpanded);
-  renderBoard();
-});
-q('#done-toggle').addEventListener('click', () => {
-  doneExpanded = !doneExpanded;
-  q('#done-bar').classList.toggle('expanded', doneExpanded);
-  renderBoard();
-  // Wait for renderBoard + browser layout before measuring height
-  setTimeout(updateFabPosition, 60);
-});
+q('#archive-toggle').addEventListener('click', ()=>{ archiveExpanded=!archiveExpanded; q('#archive-bar').classList.toggle('expanded',archiveExpanded); renderBoard(); });
+q('#done-toggle').addEventListener('click',    ()=>{ doneExpanded=!doneExpanded;    q('#done-bar').classList.toggle('expanded',doneExpanded); document.body.classList.toggle('done-expanded', doneExpanded); renderBoard(); });
 
 // ─── CARD MODAL ───────────────────────────────────────────────────────────────
 q('#fab').addEventListener('click', openModal);
@@ -1224,16 +1190,11 @@ function initTheme() {
   applyTheme(localStorage.getItem(LS_THEME) || 'dark', false);
 }
 function applyTheme(theme, animate=true) {
-  // Primer theming via data-color-mode on html element
-  document.documentElement.setAttribute('data-color-mode', theme);
-  document.documentElement.setAttribute('data-light-theme', 'light');
-  document.documentElement.setAttribute('data-dark-theme', 'dark');
-  // Keep our own data-theme for any remaining custom selectors
   document.documentElement.setAttribute('data-theme', theme);
   q('#theme-icon').textContent = theme==='dark' ? '☽' : '☀';
   localStorage.setItem(LS_THEME, theme);
   const mc=document.querySelector('meta[name="theme-color"]');
-  if(mc) mc.setAttribute('content', theme==='dark'?'#161b22':'#ffffff');
+  if(mc) mc.setAttribute('content', theme==='dark'?'#0e0e16':'#f3f0e8');
 }
 q('#theme-btn').addEventListener('click', ()=>{
   const cur=document.documentElement.getAttribute('data-theme');
@@ -1296,87 +1257,12 @@ setInterval(spawnParticle, 3000);
 // ─── KEYBOARD ────────────────────────────────────────────────────────────────
 document.addEventListener('keydown', e=>{
   if (e.key==='Escape') {
-    if (editingCardId) { exitEditMode(false); return; }
     if (!q('#modal-overlay').classList.contains('hidden'))  { closeModal(); return; }
     if (!q('#help-overlay').classList.contains('hidden'))   { q('#help-overlay').classList.add('hidden'); return; }
+    dismissDelete();
   }
   if ((e.ctrlKey||e.metaKey) && e.key==='Enter') openModal();
 });
-
-// ─── CSS PATCHES ─────────────────────────────────────────────────────────────
-(function injectStylePatches() {
-  const style = document.createElement('style');
-  style.textContent = `
-    /* ── Global font scale 125% ── */
-    html { font-size: 17.5px; }
-
-    /* ── Owner filter bar ── */
-    #owner-filter-bar .filter-label,
-    #owner-filter-bar > span:first-child,
-    #owner-filter-bar > label { display: none !important; }
-    #owner-filter-bar {
-      display: flex; align-items: center; gap: 6px;
-      padding: 4px 10px; background: var(--bg, #fff);
-      border-bottom: 1px solid var(--border, #d1d9e0); flex-wrap: wrap;
-    }
-    #owner-filter-chips { display: flex; gap: 4px; flex-wrap: wrap; }
-    .owner-filter-chip {
-      padding: 2px 10px; border: 1px solid var(--border, #d1d9e0);
-      border-radius: 2em; background: var(--bg-muted, #f6f8fa);
-      font-size: .75rem; color: var(--text-muted, #59636e); cursor: pointer;
-      transition: background .1s, border-color .1s, color .1s; font-family: inherit;
-    }
-    .owner-filter-chip:hover  { background: var(--bg-inset, #eaeef2); color: var(--text, #1f2328); }
-    .owner-filter-chip.active { background: var(--accent-bg, #ddf4ff); border-color: var(--accent, #0969da); color: var(--accent, #0969da); font-weight: 600; }
-
-    /* ── Board tabs alignment ── */
-    .tabs-row { display: flex !important; align-items: center !important; min-height: 40px; }
-    .board-tab { display: inline-flex !important; align-items: center !important; align-self: center !important; }
-    #tab-prev, #tab-next, #add-board { display: inline-flex !important; align-items: center !important; align-self: center !important; }
-    #boards-tabs { display: flex !important; align-items: center !important; }
-
-    /* ── FAB moves up with done bar ── */
-    #fab {
-      bottom: calc(24px + var(--done-bar-h, 0px)) !important;
-      transition: bottom .25s ease, opacity .15s, transform .12s !important;
-    }
-
-    /* ── Delete button: ONLY visible in edit mode, NEVER on hover ── */
-    .card__delete-btn { display: none !important; }
-    .card--editing .card__delete-btn,
-    .card__delete-btn.visible { display: flex !important; z-index: 10; }
-    /* Remove any hover rule that might show it */
-    .card:hover .card__delete-btn { display: none !important; }
-
-    /* ── Done cards: same compact style as Archive ── */
-    #done-bar .card {
-      display: flex !important;
-      align-items: center !important;
-      gap: 8px !important;
-      padding: 6px 10px !important;
-      opacity: 1 !important;
-    }
-    #done-bar .card__title { padding-right: 0 !important; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1; }
-    #done-bar .card__meta  { display: none !important; }
-    #done-bar .card__title-compact { flex: 1; }
-    /* Done expanded container same as archive */
-    #done-cards { gap: 4px !important; padding: 0 12px 8px !important; max-height: 220px; overflow-y: auto; }
-  `;
-  document.head.appendChild(style);
-
-  // Nuke bare "Filter:" text node
-  requestAnimationFrame(() => {
-    const bar = document.querySelector('#owner-filter-bar');
-    if (!bar) return;
-    bar.childNodes.forEach(node => {
-      if (node.nodeType === 3 && /filter/i.test(node.textContent)) node.remove();
-      if (node.nodeType === 1 && node.tagName !== 'DIV' && node.tagName !== 'BUTTON'
-          && /filter/i.test(node.textContent) && !node.querySelector('button')) {
-        node.style.display = 'none';
-      }
-    });
-  });
-})();
 
 // ─── SERVICE WORKER ──────────────────────────────────────────────────────────
 if ('serviceWorker' in navigator) {
@@ -1394,10 +1280,13 @@ if ('serviceWorker' in navigator) {
 
 // ─── INIT ────────────────────────────────────────────────────────────────────
 initTheme();
+createSkeletonLoader();
+selectedOwners = loadSelectedOwners(); // Load saved filter preferences
 boards = loadFromLocal();
 currentBoardId = localStorage.getItem(LS_CURRENT) || boards[0]?.id;
 if (!boards.find(b=>b.id===currentBoardId)) currentBoardId = boards[0]?.id;
 
 renderTabs();
+renderOwnerFilterChips();
 renderBoard();
 initGSI();
