@@ -1,8 +1,10 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   TASKBOARDS — Fluent 2 Design System
-   Microsoft design language: Segoe UI · 4/8px radius · layered elevation
-   https://fluent2.microsoft.design/
+   TASKBOARDS — Fluent 2 Design System + Figtree typeface
+   https://fluent2.microsoft.design/ · https://fonts.google.com/specimen/Figtree
    ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Figtree from Google Fonts ── */
+@import url('https://fonts.googleapis.com/css2?family=Figtree:ital,wght@0,300..900;1,300..900&display=swap');
 
 /* ── Fluent 2 global tokens ── */
 :root {
@@ -149,7 +151,7 @@ body {
   overflow: hidden;
   background: var(--f-bg1);
   color: var(--f-fg1);
-  font-family: "Segoe UI Variable", "Segoe UI", system-ui, -apple-system, sans-serif;
+  font-family: "Figtree", "Segoe UI Variable", "Segoe UI", system-ui, -apple-system, sans-serif;
   font-size: 14px;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
