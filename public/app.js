@@ -1303,3 +1303,65 @@ renderTabs();
 renderOwnerFilterChips();
 renderBoard();
 initGSI();
+
+// ─── PWA INSTALL BANNER ──────────────────────────────────────────────────────
+(function initInstallBanner() {
+  const banner      = document.getElementById('install-banner');
+  const installBtn  = document.getElementById('install-banner-btn');
+  const dismissBtn  = document.getElementById('install-banner-dismiss');
+  const subText     = document.getElementById('install-banner-sub');
+  if (!banner) return;
+
+  // Don't show if already installed (running in standalone mode)
+  const isStandalone = window.matchMedia('(display-mode: standalone)').matches
+    || window.navigator.standalone === true;
+  if (isStandalone) return;
+
+  // Don't show if user previously dismissed (within 30 days)
+  const dismissedAt = parseInt(localStorage.getItem('install-banner-dismissed') || '0', 10);
+  if (dismissedAt && Date.now() - dismissedAt < 30 * 24 * 60 * 60 * 1000) return;
+
+  const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent) && !window.MSStream;
+  let deferredPrompt = null;
+
+  function showBanner() {
+    banner.classList.remove('hidden');
+  }
+  function hideBanner(remember) {
+    banner.classList.add('hidden');
+    if (remember) localStorage.setItem('install-banner-dismissed', Date.now().toString());
+  }
+
+  dismissBtn.addEventListener('click', () => hideBanner(true));
+
+  if (isIOS) {
+    // iOS Safari: no beforeinstallprompt — show manual instructions
+    banner.classList.add('install-banner--ios');
+    subText.textContent = 'Tap the share icon ↑ then "Add to Home Screen"';
+    installBtn.textContent = 'How?';
+    installBtn.addEventListener('click', () => {
+      alert('To install on iOS:\n\n1. Tap the Share button (□↑) in Safari\n2. Scroll down and tap "Add to Home Screen"\n3. Tap "Add" to confirm');
+    });
+    // Show after a short delay so it doesn't feel abrupt
+    setTimeout(showBanner, 2500);
+
+  } else {
+    // Chrome / Edge / Android: use native prompt
+    window.addEventListener('beforeinstallprompt', e => {
+      e.preventDefault();
+      deferredPrompt = e;
+      setTimeout(showBanner, 1500);
+    });
+
+    installBtn.addEventListener('click', async () => {
+      if (!deferredPrompt) return;
+      deferredPrompt.prompt();
+      const { outcome } = await deferredPrompt.userChoice;
+      deferredPrompt = null;
+      hideBanner(outcome === 'accepted');
+    });
+
+    // Hide banner if app gets installed via other means
+    window.addEventListener('appinstalled', () => hideBanner(false));
+  }
+})();
