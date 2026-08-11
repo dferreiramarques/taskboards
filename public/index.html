@@ -41,6 +41,7 @@
     <!-- RIGHT: help + theme + Google login -->
     <div class="topbar__actions">
       <button id="help-btn" class="topbar__btn" title="How it works">?</button>
+      <button id="install-btn" class="topbar__btn topbar__btn--install" title="Install app" style="display:none">⬇</button>
       <button id="theme-btn" class="topbar__btn topbar__btn--theme" title="Toggle theme">
         <span id="theme-icon">☽</span>
       </button>
@@ -267,16 +268,6 @@
   </div>
 
   <script src="./app.js"></script>
-  <!-- PWA Install Banner -->
-  <div id="install-banner" class="install-banner hidden" role="complementary" aria-label="Install app">
-    <div class="install-banner__icon">◈</div>
-    <div class="install-banner__text">
-      <strong>Install Taskboards</strong>
-      <span class="install-banner__sub" id="install-banner-sub">Add to your home screen for the best experience</span>
-    </div>
-    <button class="install-banner__btn" id="install-banner-btn">Install</button>
-    <button class="install-banner__dismiss" id="install-banner-dismiss" aria-label="Dismiss">✕</button>
-  </div>
 
 </body>
 </html>

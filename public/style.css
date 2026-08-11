@@ -1276,3 +1276,15 @@ kbd {
 .install-banner--ios .install-banner__btn {
   background: none; border: 1px solid var(--f-brand); color: var(--f-brand); font-size: .75rem; padding: 5px 10px;
 }
+
+/* ── Install button in topbar ── */
+.topbar__btn--install {
+  color: var(--f-brand) !important;
+  border-color: var(--f-brand) !important;
+  background: var(--f-brand-bg) !important;
+  font-size: 16px !important;
+}
+.topbar__btn--install:hover {
+  background: var(--f-brand) !important;
+  color: #fff !important;
+}
