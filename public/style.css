@@ -904,7 +904,7 @@ body.dragging-active .card:not(.dragging-source) { pointer-events: none; }
 
 /* FAB moves up when Done expands */
 body.done-expanded .fab {
-  bottom: calc(200px + 24px);
+  bottom: calc(300px + 24px);
 }
 
 /* ─── MODAL ─────────────────────────────────────────────────────────── */

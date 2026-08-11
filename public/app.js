@@ -1146,8 +1146,21 @@ document.addEventListener('pointerdown', e => {
 });
 
 // ─── SHELF EXPAND ─────────────────────────────────────────────────────────────
-q('#archive-toggle').addEventListener('click', ()=>{ archiveExpanded=!archiveExpanded; q('#archive-bar').classList.toggle('expanded',archiveExpanded); renderBoard(); });
-q('#done-toggle').addEventListener('click',    ()=>{ doneExpanded=!doneExpanded;    q('#done-bar').classList.toggle('expanded',doneExpanded); document.body.classList.toggle('done-expanded', doneExpanded); renderBoard(); });
+q('#archive-toggle').addEventListener('click', ()=>{
+  archiveExpanded = !archiveExpanded;
+  q('#archive-bar').classList.toggle('expanded', archiveExpanded);
+  const hint = q('#archive-bar .shelf__hint');
+  if (hint) hint.textContent = archiveExpanded ? 'click to collapse' : 'click to expand';
+  renderBoard();
+});
+q('#done-toggle').addEventListener('click', () => {
+  doneExpanded = !doneExpanded;
+  q('#done-bar').classList.toggle('expanded', doneExpanded);
+  document.body.classList.toggle('done-expanded', doneExpanded);
+  const hint = q('#done-bar .shelf__hint');
+  if (hint) hint.textContent = doneExpanded ? 'click to collapse' : 'click to expand';
+  renderBoard();
+});
 
 // ─── CARD MODAL ───────────────────────────────────────────────────────────────
 q('#fab').addEventListener('click', openModal);
