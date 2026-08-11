@@ -1085,6 +1085,20 @@ body.done-expanded .fab {
   line-height: 1.5;
 }
 
+.help__credit {
+  text-align: center;
+  font-size: 11px;
+  color: var(--color-fg-subtle);
+  margin-top: 10px;
+  padding-top: 4px;
+}
+.help__credit a {
+  color: var(--color-accent-fg);
+  text-decoration: none;
+  font-weight: 500;
+}
+.help__credit a:hover { text-decoration: underline; }
+
 kbd {
   background: var(--color-canvas-inset);
   border: 1px solid var(--color-border-default);
