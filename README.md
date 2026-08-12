@@ -2,8 +2,6 @@
 
 **A fast, offline-first Kanban PWA** — multiple boards, Google Drive sync, installable on desktop and mobile.
 
-🔗 **Live app → [taskboards.up.railway.app](https://taskboards.up.railway.app)**
-
 [![Ko-fi](https://img.shields.io/badge/support-ko--fi-FF5E5B?logo=ko-fi&logoColor=white)](https://ko-fi.com/dferreiramarques)
 [![LinkedIn](https://img.shields.io/badge/David%20Marques-LinkedIn-0A66C2?logo=linkedin&logoColor=white)](https://www.linkedin.com/in/dferreiramarques/)
 
