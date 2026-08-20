@@ -1,6 +1,6 @@
 # ◈ Taskboards
 
-**A fast, offline-first Kanban PWA** — multiple boards, Google Drive sync, installable on desktop and mobile.
+**A fast Kanban board, built for speed, not busywork.** Sign in with Google and your boards live only in your own Drive — Taskboards has no server or database of its own.
 
 [![Ko-fi](https://img.shields.io/badge/support-ko--fi-FF5E5B?logo=ko-fi&logoColor=white)](https://ko-fi.com/dferreiramarques)
 [![LinkedIn](https://img.shields.io/badge/David%20Marques-LinkedIn-0A66C2?logo=linkedin&logoColor=white)](https://www.linkedin.com/in/dferreiramarques/)
@@ -16,8 +16,8 @@
 | **Inline editing** | Double-click (or double-tap on mobile) any card to edit its title in place. |
 | **Owner & due date** | Each card tracks an assignee and optional due date. Overdue = red, due ≤ 3 days = orange. |
 | **Owner filter** | Quick-filter chips above the board — tap an owner to see only their cards. |
-| **Google Drive sync** | Sign in with Google to save all boards to your personal Drive (private app folder). Works across devices. |
-| **Offline-first PWA** | Service worker caches all assets. Works without internet after the first load. |
+| **Google sign-in required** | A full-screen gate blocks the board until you sign in with Google. There is no local/offline account-free mode. |
+| **Google Drive sync** | Every board saves to your personal Drive (private app folder) — nothing is stored on any Taskboards server. Works across devices. |
 | **Installable** | Install banner appears automatically on Chrome/Edge (desktop + Android) and with step-by-step instructions on iOS Safari. |
 | **Dark / light theme** | Toggle between themes. Preference saved locally. |
 | **Confetti** | Cards moved to Done get a small celebration. 🎉 |
@@ -119,7 +119,8 @@ npm start
 ```
 taskboards/
 ├── public/
-│   ├── index.html      # App shell + all modals
+│   ├── index.html     # Product / landing page — sign in or continue without an account
+│   ├── app.html        # App shell + all modals (the actual board)
 │   ├── app.js          # All logic: boards, cards, drag, sync, PWA install
 │   ├── style.css       # Primer-based design system, light + dark themes
 │   ├── sw.js           # Service worker — cache versioning, offline support

@@ -1105,6 +1105,51 @@ kbd {
 .login-btn:hover { background: var(--f-bg3); color: var(--f-fg1); border-color: var(--f-stroke1); box-shadow: var(--f-shadow2); }
 .login-btn__icon { width: 16px; height: 16px; flex-shrink: 0; }
 .login-btn__label { letter-spacing: .01em; }
+.login-btn:disabled { opacity: .5; cursor: not-allowed; }
+
+/* ══════════════════════════════════════════════════════
+   AUTH GATE — blocks the board until sign-in
+   ══════════════════════════════════════════════════════ */
+.auth-gate {
+  position: fixed; inset: 0;
+  z-index: 10000;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--f-bg1);
+  padding: 24px;
+  animation: fade-in var(--f-fast) var(--f-ease);
+}
+.auth-gate.hidden { display: none; }
+
+.auth-gate__card {
+  width: 100%; max-width: 380px;
+  display: flex; flex-direction: column; align-items: center;
+  text-align: center;
+  gap: 14px;
+}
+
+.auth-gate__mark {
+  width: 52px; height: 52px;
+  border-radius: var(--f-r8);
+  background: #0a0a0a;
+  color: var(--f-brand);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 26px;
+  box-shadow: var(--f-shadow8);
+  margin-bottom: 4px;
+}
+
+.auth-gate__title { font-size: 1.3rem; font-weight: 700; color: var(--f-fg1); letter-spacing: -.01em; }
+.auth-gate__sub { font-size: .88rem; color: var(--f-fg3); line-height: 1.55; }
+
+.login-btn--gate {
+  padding: 11px 22px;
+  border-radius: var(--f-r6);
+  font-size: .9rem;
+  margin-top: 6px;
+}
+.login-btn--gate .login-btn__icon { width: 18px; height: 18px; }
+
+.auth-gate__status { font-size: .78rem; color: var(--f-fg4); min-height: 1em; }
 
 .user-pill {
   position: relative;
@@ -1209,16 +1254,6 @@ kbd {
 .skeleton-card         { width: 300px; height: 80px; }
 .skeleton-card--short  { width: 200px; height: 60px; }
 .skeleton-card--medium { width: 250px; height: 70px; }
-
-/* ══════════════════════════════════════════════════════
-   MISC
-   ══════════════════════════════════════════════════════ */
-.no-gsi-notice {
-  font-size: .625rem; color: var(--f-fg4);
-  padding: 3px 8px; border-radius: var(--f-rpill);
-  border: 1px dashed var(--f-stroke1);
-  letter-spacing: .04em; white-space: nowrap; cursor: default;
-}
 
 /* ══════════════════════════════════════════════════════
    SCROLLBARS

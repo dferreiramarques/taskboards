@@ -1,7 +1,7 @@
 'use strict';
 
 // ─── VERSION ─────────────────────────────────────────────────────────────────
-const APP_VERSION = '3.1.0'; // smoother animations + 125% scale + FAB fix
+const APP_VERSION = '3.2.0'; // mandatory Google sign-in gate, no more local-only mode
 console.log('%c TaskBoards v' + APP_VERSION + ' loaded', 'background:#ffa300;color:#000;padding:2px 8px;border-radius:4px;font-weight:bold');
 
 // ─── CONFIG & CONSTANTS ───────────────────────────────────────────────────────
@@ -491,16 +491,19 @@ function createSkeletonLoader() {
   document.body.appendChild(skeleton);
 }
 
+// ─── AUTH GATE ───────────────────────────────────────────────────────────────
+// Taskboards requires a Google sign-in before any board is shown — there is
+// no local/offline-only mode. Boards only ever live in the signed-in user's
+// own Drive; this app has no database of its own.
+function showAuthGate() { q('#auth-gate').classList.remove('hidden'); }
+function hideAuthGate() { q('#auth-gate').classList.add('hidden'); }
+function setGateStatus(msg) { q('#gate-status').textContent = msg || ''; }
+
 // ─── GOOGLE IDENTITY SERVICES ────────────────────────────────────────────────
 function initGSI() {
   if (!GOOGLE_CLIENT_ID) {
-    // Hide the sign-in button, show a subtle local-mode badge in its place
-    q('#login-btn').style.display = 'none';
-    const badge = document.createElement('span');
-    badge.className = 'no-gsi-notice';
-    badge.title = 'Add GOOGLE_CLIENT_ID in config.js to enable Google login';
-    badge.textContent = '⬡ Local';
-    q('#login-area').appendChild(badge);
+    setGateStatus('Google sign-in isn’t configured for this deployment.');
+    q('#gate-login-btn').disabled = true;
     return;
   }
 
@@ -514,16 +517,23 @@ function initGSI() {
       scope: DRIVE_SCOPE,
       callback: handleTokenResponse
     });
+    setGateStatus('');
   }, 200);
 
-  q('#login-btn').addEventListener('click', () => {
+  q('#gate-login-btn').addEventListener('click', () => {
     if (!tokenClient) return;
+    setGateStatus('Opening Google sign-in…');
     tokenClient.requestAccessToken({ prompt: 'select_account' });
   });
 }
 
 async function handleTokenResponse(resp) {
-  if (resp.error) { console.error('GSI error:', resp.error); return; }
+  if (resp.error) {
+    console.error('GSI error:', resp.error);
+    setGateStatus('Sign-in was cancelled — try again.');
+    return;
+  }
+  setGateStatus('');
   gAccessToken = resp.access_token;
   console.log('GSI token received, scopes:', resp.scope);
 
@@ -560,11 +570,11 @@ async function handleTokenResponse(resp) {
 
   renderTabs();
   renderBoard();
+  hideAuthGate();
 }
 
 function showUserPill() {
   if (!gUser) return;
-  q('#login-btn').style.display = 'none';
   const pill = q('#user-pill');
   pill.classList.remove('hidden');
   q('#user-avatar').src = gUser.picture || '';
@@ -604,10 +614,10 @@ function handleLogout() {
 
   closeUserMenu();
   q('#user-pill').classList.add('hidden');
-  q('#login-btn').style.display = '';
   setSyncStatus('', 'Offline');
   renderTabs();
   renderBoard();
+  showAuthGate();
 }
 
 q('#logout-btn')?.addEventListener('click', handleLogout);

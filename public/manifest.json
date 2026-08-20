@@ -2,7 +2,7 @@
   "name": "Taskboards",
   "short_name": "Taskboards",
   "description": "Task management board with archive, todo, in-progress and done zones",
-  "start_url": "/",
+  "start_url": "/app.html",
   "display": "standalone",
   "background_color": "#0e0e16",
   "theme_color": "#0e0e16",

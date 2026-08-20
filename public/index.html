@@ -1,273 +1,726 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="dark">
+<html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <meta name="theme-color" content="#0d1117" />
-  <meta name="apple-mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <meta name="apple-mobile-web-app-title" content="Taskboards" />
-  <title>Taskboards</title>
-  <link rel="manifest" href="./manifest.json" />
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="./style.css" />
-  <script src="./config.js"></script>
-  <!-- Force SW update if stale -->
-  <script>
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.getRegistrations().then(regs => {
-        regs.forEach(r => r.update());
-      });
-    }
-  </script>
-  <!-- Google Identity Services — loaded async, app checks readiness -->
-  <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <script>
+        (function () {
+            var saved = localStorage.getItem('taskboards-theme') || 'dark';
+            document.documentElement.setAttribute('data-theme', saved);
+        })();
+    </script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#0078d4">
+    <meta name="description" content="Taskboards is a fast Kanban board — multiple boards, owners, due dates. Sign in with Google and your data lives only in your own Drive. No server, no database.">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'><rect fill='%230a0a0a' width='192' height='192'/><text x='96' y='132' font-family='Consolas, monospace' font-size='130' font-weight='bold' fill='%230078d4' text-anchor='middle'>%E2%97%88</text></svg>">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Figtree:ital,wght@0,300..900;1,300..900&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <title>Taskboards — Kanban Built for Speed</title>
+    <style>
+        :root {
+            --bg1: #ffffff;
+            --bg2: #f5f5f5;
+            --bg3: #ebebeb;
+            --bg4: #e0e0e0;
+            --fg1: #242424;
+            --fg2: #424242;
+            --fg3: #616161;
+            --fg4: #898989;
+            --stroke1: #d1d1d1;
+            --stroke2: #e0e0e0;
+            --brand: #0078d4;
+            --brand-h: #106ebe;
+            --brand-fg: #ffffff;
+            --brand-bg: rgba(0, 120, 212, .08);
+            --z-todo: #0078d4;
+            --z-inprog: #ca5010;
+            --z-done: #7160e8;
+            --shadow: 0 8px 24px rgba(20, 20, 30, .08);
+            color-scheme: light;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            :root:not([data-theme="light"]) {
+                --bg1: #141414;
+                --bg2: #1f1f1f;
+                --bg3: #292929;
+                --bg4: #333333;
+                --fg1: #ffffff;
+                --fg2: #d6d6d6;
+                --fg3: #adadad;
+                --fg4: #707070;
+                --stroke1: #404040;
+                --stroke2: #2e2e2e;
+                --brand: #479ef5;
+                --brand-h: #62abf5;
+                --brand-fg: #0e0e16;
+                --brand-bg: rgba(71, 158, 245, .12);
+                --z-todo: #479ef5;
+                --z-inprog: #ffa15c;
+                --z-done: #a695f5;
+                --shadow: 0 12px 32px rgba(0, 0, 0, .45);
+                color-scheme: dark;
+            }
+        }
+
+        :root[data-theme="dark"] {
+            --bg1: #141414;
+            --bg2: #1f1f1f;
+            --bg3: #292929;
+            --bg4: #333333;
+            --fg1: #ffffff;
+            --fg2: #d6d6d6;
+            --fg3: #adadad;
+            --fg4: #707070;
+            --stroke1: #404040;
+            --stroke2: #2e2e2e;
+            --brand: #479ef5;
+            --brand-h: #62abf5;
+            --brand-fg: #0e0e16;
+            --brand-bg: rgba(71, 158, 245, .12);
+            --z-todo: #479ef5;
+            --z-inprog: #ffa15c;
+            --z-done: #a695f5;
+            --shadow: 0 12px 32px rgba(0, 0, 0, .45);
+            color-scheme: dark;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        html { scroll-behavior: smooth; }
+
+        @media (prefers-reduced-motion: reduce) {
+            html { scroll-behavior: auto; }
+            * { animation-duration: .001ms !important; transition-duration: .001ms !important; }
+        }
+
+        body {
+            background: var(--bg1);
+            color: var(--fg1);
+            font-family: 'Figtree', system-ui, -apple-system, 'Segoe UI', sans-serif;
+            line-height: 1.5;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        .mono { font-family: 'JetBrains Mono', 'Courier New', monospace; }
+
+        .wrap { max-width: 1120px; margin: 0 auto; padding: 0 32px; }
+
+        a { color: inherit; }
+
+        img, svg { display: block; max-width: 100%; }
+
+        /* ===== Header ===== */
+
+        header {
+            position: sticky;
+            top: 0;
+            z-index: 20;
+            background: color-mix(in srgb, var(--bg1) 88%, transparent);
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid var(--stroke2);
+        }
+
+        .header-inner {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            height: 64px;
+        }
+
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-weight: 700;
+            font-size: 1.05rem;
+            letter-spacing: -0.01em;
+            text-decoration: none;
+        }
+
+        .brand-mark {
+            width: 30px;
+            height: 30px;
+            border-radius: 7px;
+            background: #0a0a0a;
+            color: var(--brand);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: 'JetBrains Mono', monospace;
+            font-weight: 700;
+            font-size: 16px;
+            flex-shrink: 0;
+        }
+
+        nav { display: flex; align-items: center; gap: 28px; }
+
+        nav a:not(.btn) {
+            font-size: .9rem;
+            color: var(--fg3);
+            text-decoration: none;
+            transition: color .15s ease;
+        }
+
+        nav a:not(.btn):hover { color: var(--fg1); }
+
+        .nav-links { display: flex; gap: 24px; }
+
+        @media (max-width: 780px) { .nav-links { display: none; } }
+
+        .theme-toggle {
+            width: 36px;
+            height: 36px;
+            border-radius: 8px;
+            border: 1px solid var(--stroke1);
+            background: var(--bg2);
+            color: var(--fg2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+        }
+
+        .theme-toggle:hover { border-color: var(--brand); color: var(--brand); }
+        .theme-toggle svg { width: 16px; height: 16px; }
+
+        /* ===== Buttons ===== */
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 9px;
+            padding: 12px 20px;
+            border-radius: 9px;
+            font-weight: 600;
+            font-size: .92rem;
+            text-decoration: none;
+            border: 1px solid transparent;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+
+        .btn svg { width: 17px; height: 17px; flex-shrink: 0; }
+
+        .btn-primary { background: var(--brand); color: var(--brand-fg); }
+        .btn-primary:hover { background: var(--brand-h); }
+
+        .btn-ghost {
+            background: transparent;
+            border-color: var(--stroke1);
+            color: var(--fg1);
+        }
+        .btn-ghost:hover { border-color: var(--brand); color: var(--brand); }
+
+        .btn-sm { padding: 8px 14px; font-size: .82rem; border-radius: 7px; }
+
+        /* ===== Hero ===== */
+
+        .hero { padding: 88px 0 64px; position: relative; overflow: hidden; }
+
+        .eyebrow {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: .74rem;
+            font-weight: 600;
+            letter-spacing: .12em;
+            text-transform: uppercase;
+            color: var(--brand);
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 20px;
+        }
+
+        .eyebrow::before {
+            content: "";
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: var(--brand);
+        }
+
+        h1 {
+            font-size: clamp(2.4rem, 5.4vw, 4rem);
+            font-weight: 800;
+            letter-spacing: -0.03em;
+            line-height: 1.04;
+            max-width: 16ch;
+            text-wrap: balance;
+        }
+
+        h1 em { font-style: normal; color: var(--brand); }
+
+        .hero-sub {
+            margin-top: 22px;
+            font-size: 1.15rem;
+            color: var(--fg3);
+            max-width: 58ch;
+            text-wrap: pretty;
+        }
+
+        .hero-cta { margin-top: 34px; display: flex; flex-wrap: wrap; gap: 14px; align-items: center; }
+
+        .hero-meta {
+            margin-top: 14px;
+            font-size: .82rem;
+            color: var(--fg4);
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        /* ===== Board visual ===== */
+
+        .board-visual {
+            margin-top: 64px;
+            border: 1px solid var(--stroke1);
+            border-radius: 14px;
+            background: var(--bg2);
+            padding: 28px 28px 20px;
+            box-shadow: var(--shadow);
+        }
+
+        .board-visual svg { width: 100%; height: auto; display: block; }
+
+        .board-visual-footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 16px;
+            padding-top: 16px;
+            border-top: 1px solid var(--stroke2);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: .72rem;
+            color: var(--fg4);
+        }
+
+        .dot-row { display: flex; gap: 6px; }
+        .dot-row span { width: 7px; height: 7px; border-radius: 50%; background: var(--stroke1); }
+
+        /* ===== Sections ===== */
+
+        section { padding: 76px 0; }
+        section.tight { padding: 56px 0; }
+
+        .section-head { max-width: 60ch; margin-bottom: 44px; }
+        .section-head .eyebrow { margin-bottom: 14px; }
+
+        h2 {
+            font-size: clamp(1.7rem, 3vw, 2.3rem);
+            font-weight: 700;
+            letter-spacing: -0.02em;
+            text-wrap: balance;
+        }
+
+        .section-head p { margin-top: 12px; color: var(--fg3); font-size: 1.02rem; }
+
+        .divider { border-top: 1px solid var(--stroke2); }
+
+        /* ===== Feature grid ===== */
+
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 1px;
+            background: var(--stroke2);
+            border: 1px solid var(--stroke2);
+            border-radius: 14px;
+            overflow: hidden;
+        }
+
+        @media (max-width: 860px) { .feature-grid { grid-template-columns: repeat(2, 1fr); } }
+        @media (max-width: 560px) { .feature-grid { grid-template-columns: 1fr; } }
+
+        .feature-card {
+            background: var(--bg1);
+            padding: 26px 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .feature-index {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: .72rem;
+            color: var(--brand);
+            font-weight: 600;
+        }
+
+        .feature-card h3 { font-size: 1.02rem; font-weight: 700; letter-spacing: -0.01em; }
+        .feature-card p { color: var(--fg3); font-size: .88rem; line-height: 1.55; }
+
+        /* ===== Modes ===== */
+
+        .mode-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+
+        @media (max-width: 720px) { .mode-grid { grid-template-columns: 1fr; } }
+
+        .mode-card { border: 1px solid var(--stroke1); border-radius: 14px; padding: 28px; background: var(--bg2); }
+
+        .mode-card .mono {
+            font-size: .72rem;
+            letter-spacing: .1em;
+            text-transform: uppercase;
+            color: var(--fg4);
+            font-weight: 600;
+        }
+
+        .mode-card h3 { margin-top: 8px; font-size: 1.2rem; font-weight: 700; }
+        .mode-card p { margin-top: 10px; color: var(--fg3); font-size: .92rem; }
+
+        /* ===== Sync chain ===== */
+
+        .chain { display: flex; align-items: stretch; gap: 0; overflow-x: auto; padding-bottom: 8px; }
+
+        .chain-node {
+            flex: 1 0 150px;
+            border: 1px solid var(--stroke1);
+            background: var(--bg2);
+            padding: 20px 18px;
+            position: relative;
+        }
+
+        .chain-node:first-child { border-radius: 12px 0 0 12px; }
+        .chain-node:last-child { border-radius: 0 12px 12px 0; }
+        .chain-node + .chain-node { border-left: none; }
+
+        .chain-node h4 { font-size: .92rem; font-weight: 700; }
+        .chain-node p { margin-top: 6px; font-size: .78rem; color: var(--fg3); line-height: 1.5; }
+
+        .chain-arrow { flex: 0 0 auto; display: flex; align-items: center; padding: 0 4px; color: var(--fg4); z-index: 1; }
+        .chain-arrow svg { width: 14px; height: 14px; }
+
+        /* ===== Get started section ===== */
+
+        .download-grid { display: grid; grid-template-columns: 1.1fr 1fr; gap: 20px; align-items: stretch; }
+        .download-grid--single { grid-template-columns: 1fr; max-width: 460px; margin: 0 auto; }
+
+        @media (max-width: 820px) { .download-grid { grid-template-columns: 1fr; } }
+
+        .download-card { border-radius: 16px; padding: 34px; display: flex; flex-direction: column; gap: 16px; }
+
+        .download-card.primary {
+            background: linear-gradient(155deg, var(--brand) 0%, var(--brand-h) 100%);
+            color: #ffffff;
+        }
+
+        .download-card.secondary { border: 1px solid var(--stroke1); background: var(--bg2); }
+
+        .download-card .platform-icon { width: 40px; height: 40px; }
+
+        .download-card h3 { font-size: 1.3rem; font-weight: 700; letter-spacing: -0.01em; }
+
+        .download-card.primary p { color: rgba(255,255,255,.85); font-size: .92rem; }
+        .download-card.secondary p { color: var(--fg3); font-size: .92rem; }
+
+        .download-card.primary .btn-primary { background: #ffffff; color: var(--brand-h); }
+        .download-card.primary .btn-primary:hover { background: #f0f6ff; }
+
+        .file-meta {
+            margin-top: auto;
+            padding-top: 14px;
+            border-top: 1px solid rgba(255,255,255,.22);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: .76rem;
+            display: flex;
+            gap: 16px;
+            flex-wrap: wrap;
+        }
+
+        .download-card.secondary .file-meta { border-top-color: var(--stroke2); color: var(--fg4); }
+        .download-card.primary .file-meta { color: rgba(255,255,255,.75); }
+
+        .checklist { list-style: none; display: flex; flex-direction: column; gap: 8px; margin-top: 2px; }
+        .checklist li { display: flex; gap: 9px; font-size: .88rem; color: var(--fg2); align-items: flex-start; }
+        .checklist svg { width: 15px; height: 15px; flex-shrink: 0; margin-top: 2px; color: var(--brand); }
+
+        /* ===== Footer ===== */
+
+        footer { border-top: 1px solid var(--stroke2); padding: 40px 0; }
+
+        .footer-inner {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 16px;
+            font-size: .85rem;
+            color: var(--fg4);
+        }
+
+        .footer-inner a { text-decoration: none; color: var(--fg3); }
+        .footer-inner a:hover { color: var(--brand); }
+
+        .footer-links { display: flex; gap: 20px; flex-wrap: wrap; }
+    </style>
 </head>
 <body>
-  <div id="particles" class="particles" aria-hidden="true"></div>
-  <div id="confetti-layer" class="confetti-layer" aria-hidden="true"></div>
-  <div id="toast-container" class="toast-container" aria-live="polite"></div>
 
-  <!-- ── TOP BAR ROW 1: login + brand + actions ── -->
-  <div class="topbar">
-    <!-- LEFT: brand -->
-    <div class="topbar__brand">
-      <span class="topbar__logo">◈</span>
-      <span class="topbar__name">TASKBOARDS</span>
-    </div>
+    <header>
+        <div class="wrap header-inner">
+            <a class="brand" href="#top">
+                <span class="brand-mark">◈</span>
+                Taskboards
+            </a>
+            <nav>
+                <div class="nav-links">
+                    <a href="#features">Features</a>
+                    <a href="#privacy">Privacy</a>
+                    <a href="#sync">Sync</a>
+                    <a href="#start">Get started</a>
+                    <a href="https://github.com/dferreiramarques/taskboards" target="_blank" rel="noopener">GitHub</a>
+                </div>
+                <button class="theme-toggle" id="themeToggle" aria-label="Toggle color theme" title="Toggle theme">
+                    <svg id="themeIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></svg>
+                </button>
+            </nav>
+        </div>
+    </header>
 
-    <!-- RIGHT: help + theme + Google login -->
-    <div class="topbar__actions">
-      <button id="help-btn" class="topbar__btn" title="How it works">?</button>
-      <button id="install-btn" class="topbar__btn topbar__btn--install" title="Install app" style="display:none">⬇</button>
-      <button id="theme-btn" class="topbar__btn topbar__btn--theme" title="Toggle theme">
-        <span id="theme-icon">☽</span>
-      </button>
+    <main id="top">
+        <section class="hero">
+            <div class="wrap">
+                <div class="eyebrow mono">Free &middot; Google Sign-In &middot; No Setup</div>
+                <h1>A kanban board built for <em>speed</em>, not busywork.</h1>
+                <p class="hero-sub">
+                    Taskboards is a fast Kanban board designed to keep work moving, not to manage itself.
+                    Archive, To&nbsp;Do, In&nbsp;Progress, Done — drag cards between zones, track owners and
+                    due dates, and stay focused on the task instead of the tool.
+                </p>
+                <div class="hero-cta">
+                    <a class="btn btn-primary" href="app.html">
+                        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+                            <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+                            <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05"/>
+                            <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+                        </svg>
+                        Continue with Google
+                    </a>
+                    <a class="btn btn-ghost" href="#privacy">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/></svg>
+                        Where's my data?
+                    </a>
+                </div>
+                <div class="hero-meta">No server, no database &middot; every board lives only in your own Google Drive</div>
 
-      <!-- Google SSO -->
-      <div class="topbar__login" id="login-area">
-        <button class="login-btn" id="login-btn" title="Sign in with Google">
-          <svg class="login-btn__icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-            <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
-            <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
-            <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05"/>
-            <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
-          </svg>
-          <span class="login-btn__label">Sign in</span>
-        </button>
-        <div class="user-pill hidden" id="user-pill">
-          <img class="user-pill__avatar" id="user-avatar" src="" alt="" />
-          <span class="user-pill__name" id="user-name"></span>
-          <div class="user-pill__menu" id="user-menu">
-            <div class="user-pill__menu-email" id="user-email-menu"></div>
-            <div class="user-pill__menu-divider"></div>
-            <button class="user-pill__menu-item" id="logout-btn">Sign out</button>
-            <div class="sync-status" id="sync-status">
-              <span class="sync-dot" id="sync-dot"></span>
-              <span id="sync-label">Offline</span>
+                <div class="board-visual" aria-hidden="true">
+                    <svg viewBox="0 0 900 250" preserveAspectRatio="xMidYMid meet">
+                        <!-- TO DO -->
+                        <circle cx="18" cy="12" r="4" fill="var(--z-todo)"/>
+                        <text x="30" y="16" font-family="JetBrains Mono, monospace" font-size="12" font-weight="700" fill="var(--fg2)" letter-spacing="1">TO DO</text>
+                        <rect x="0" y="32" width="280" height="58" rx="9" fill="var(--bg1)" stroke="var(--stroke1)"/>
+                        <rect x="14" y="46" width="4" height="30" rx="2" fill="var(--z-todo)"/>
+                        <rect x="28" y="48" width="150" height="9" rx="4" fill="var(--stroke1)"/>
+                        <circle cx="252" cy="66" r="11" fill="var(--brand-bg)" stroke="var(--stroke1)"/>
+                        <rect x="28" y="66" width="90" height="7" rx="3.5" fill="var(--stroke2)"/>
+                        <rect x="0" y="100" width="280" height="58" rx="9" fill="var(--bg1)" stroke="var(--stroke1)"/>
+                        <rect x="14" y="114" width="4" height="30" rx="2" fill="var(--z-todo)"/>
+                        <rect x="28" y="116" width="110" height="9" rx="4" fill="var(--stroke1)"/>
+                        <circle cx="252" cy="134" r="11" fill="var(--brand-bg)" stroke="var(--stroke1)"/>
+                        <rect x="28" y="134" width="70" height="7" rx="3.5" fill="var(--stroke2)"/>
+
+                        <!-- IN PROGRESS -->
+                        <circle cx="328" cy="12" r="4" fill="var(--z-inprog)"/>
+                        <text x="340" y="16" font-family="JetBrains Mono, monospace" font-size="12" font-weight="700" fill="var(--fg2)" letter-spacing="1">IN PROGRESS</text>
+                        <rect x="310" y="32" width="280" height="58" rx="9" fill="var(--bg1)" stroke="var(--stroke1)"/>
+                        <rect x="324" y="46" width="4" height="30" rx="2" fill="var(--z-inprog)"/>
+                        <rect x="338" y="48" width="130" height="9" rx="4" fill="var(--stroke1)"/>
+                        <circle cx="562" cy="66" r="11" fill="var(--brand-bg)" stroke="var(--stroke1)"/>
+                        <rect x="338" y="66" width="80" height="7" rx="3.5" fill="var(--stroke2)"/>
+
+                        <!-- DONE -->
+                        <circle cx="638" cy="12" r="4" fill="var(--z-done)"/>
+                        <text x="650" y="16" font-family="JetBrains Mono, monospace" font-size="12" font-weight="700" fill="var(--fg2)" letter-spacing="1">DONE</text>
+                        <rect x="620" y="32" width="280" height="58" rx="9" fill="var(--bg1)" stroke="var(--stroke1)" opacity="0.75"/>
+                        <rect x="634" y="46" width="4" height="30" rx="2" fill="var(--z-done)"/>
+                        <rect x="648" y="48" width="120" height="9" rx="4" fill="var(--stroke1)"/>
+                        <path d="M858 62l6 6 12-13" stroke="var(--z-done)" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+                        <rect x="620" y="100" width="280" height="58" rx="9" fill="var(--bg1)" stroke="var(--stroke1)" opacity="0.5"/>
+                        <rect x="634" y="114" width="4" height="30" rx="2" fill="var(--z-done)"/>
+                        <rect x="648" y="116" width="90" height="9" rx="4" fill="var(--stroke1)"/>
+                        <path d="M858 130l6 6 12-13" stroke="var(--z-done)" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+
+                        <!-- drag hint arrow -->
+                        <path d="M294 60c8 0 8 0 14 0" stroke="var(--fg4)" stroke-width="2" stroke-dasharray="2 4" stroke-linecap="round"/>
+                        <path d="M604 60c8 0 8 0 14 0" stroke="var(--fg4)" stroke-width="2" stroke-dasharray="2 4" stroke-linecap="round"/>
+                    </svg>
+                    <div class="board-visual-footer">
+                        <span>SPRINT 4 &middot; 3 CARDS &middot; YOUR DRIVE, YOUR DATA</span>
+                        <span class="dot-row"><span></span><span></span><span></span></span>
+                    </div>
+                </div>
             </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
+        </section>
 
-  <!-- ── TOP BAR ROW 2: board tabs ── -->
-  <div class="boards-bar">
-    <button class="tab-nav" id="tab-prev" title="Previous boards">‹</button>
-    <div class="boards-tabs" id="boards-tabs">
-      <!-- Tabs injected by JS -->
-    </div>
-    <button class="tab-nav" id="tab-next" title="Next boards">›</button>
-    <button class="tab-add" id="add-board" title="New board">+</button>
-  </div>
+        <div class="wrap"><div class="divider"></div></div>
 
-  <!-- ── OWNER FILTER CHIPS ── -->
-  <div class="owner-filter-bar" id="owner-filter-bar">
-    <div class="owner-filter-chips" id="owner-filter-chips">
-      <!-- Owner chips injected by JS -->
-    </div>
-  </div>
+        <section id="features">
+            <div class="wrap">
+                <div class="section-head">
+                    <div class="eyebrow mono">What it does</div>
+                    <h2>Everything between "a pile of tasks" and a board that keeps up with you.</h2>
+                    <p>Built to get out of your way — sign in once, then just drag cards.</p>
+                </div>
+                <div class="feature-grid">
+                    <div class="feature-card">
+                        <span class="feature-index mono">01</span>
+                        <h3>Multiple boards</h3>
+                        <p>Create as many boards as you need. Tabs auto-paginate when they overflow — double-click a tab to rename it.</p>
+                    </div>
+                    <div class="feature-card">
+                        <span class="feature-index mono">02</span>
+                        <h3>4-zone Kanban</h3>
+                        <p>Archive → To Do → In Progress → Done. Drag cards between columns, or reorder within a column.</p>
+                    </div>
+                    <div class="feature-card">
+                        <span class="feature-index mono">03</span>
+                        <h3>Inline editing</h3>
+                        <p>Double-click — or double-tap on mobile — any card to edit its title right where it sits.</p>
+                    </div>
+                    <div class="feature-card">
+                        <span class="feature-index mono">04</span>
+                        <h3>Owner &amp; due dates</h3>
+                        <p>Each card tracks an assignee and optional due date. Overdue turns red, due within 3 days turns orange.</p>
+                    </div>
+                    <div class="feature-card">
+                        <span class="feature-index mono">05</span>
+                        <h3>Owner filter</h3>
+                        <p>Quick-filter chips above the board — tap a name to see only that person's cards, on any board.</p>
+                    </div>
+                    <div class="feature-card">
+                        <span class="feature-index mono">06</span>
+                        <h3>Confetti on Done</h3>
+                        <p>Every card you drag to Done gets a small celebration. A tiny reward, every single time.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
 
-  <!-- ── ARCHIVE BAR ── -->
-  <div id="archive-bar" class="shelf shelf--archive" data-zone="archive">
-    <div class="shelf__header" id="archive-toggle">
-      <div class="shelf__header-left">
-        <span class="shelf__icon">◈</span>
-        <span class="shelf__label">ARCHIVE</span>
-        <span class="shelf__count" id="archive-count">0</span>
-      </div>
-      <div class="shelf__header-right">
-        <span class="shelf__hint">click to expand</span>
-        <span class="shelf__chevron" id="archive-chevron">▾</span>
-      </div>
-    </div>
-    <div class="shelf__body" id="archive-body">
-      <div class="shelf__cards" id="archive-cards"></div>
-      <div class="shelf__empty" id="archive-empty">Drag cards here to park ideas for later</div>
-    </div>
-    <div class="drop-overlay" id="archive-drop-overlay">
-      <span class="drop-overlay__icon">◈</span><span>ARCHIVE</span>
-    </div>
-  </div>
+        <section class="tight" id="privacy">
+            <div class="wrap">
+                <div class="section-head">
+                    <div class="eyebrow mono">No middleman</div>
+                    <h2>Taskboards doesn't keep your data. Google does.</h2>
+                    <p>There's no Taskboards database and no backend storing your boards — everything lives in a private folder inside your own Google Drive.</p>
+                </div>
+                <div class="mode-grid">
+                    <div class="mode-card">
+                        <span class="mono">Privacy 01</span>
+                        <h3>No server of ours</h3>
+                        <p>Board data goes straight from your browser to your Google Drive. We never see it, never store a copy, and could never leak what we don't have.</p>
+                    </div>
+                    <div class="mode-card">
+                        <span class="mono">Privacy 02</span>
+                        <h3>Yours to revoke</h3>
+                        <p>Remove Taskboards' access any time from your Google Account permissions, and every board it ever wrote goes with it — because it was never ours.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
 
-  <!-- ── MAIN BOARD ── -->
-  <main class="board" id="board">
-    <section class="column column--todo" id="todo-column" data-zone="todo">
-      <div class="column__header">
-        <span class="column__dot"></span>
-        <span class="column__title">TO DO</span>
-        <span class="column__count" id="todo-count">0</span>
-      </div>
-      <div class="column__cards" id="todo-cards">
-        <div class="column__empty" id="todo-empty">
-          <span class="column__empty-icon">○</span>
-          <span>No tasks yet</span>
-        </div>
-      </div>
-    </section>
-    <div class="board__divider"></div>
-    <section class="column column--inprogress" id="inprogress-column" data-zone="inprogress">
-      <div class="column__header">
-        <span class="column__dot"></span>
-        <span class="column__title">IN PROGRESS</span>
-        <span class="column__count" id="inprogress-count">0</span>
-      </div>
-      <div class="column__cards" id="inprogress-cards">
-        <div class="column__empty" id="inprogress-empty">
-          <span class="column__empty-icon">◑</span>
-          <span>Nothing in progress</span>
-        </div>
-      </div>
-    </section>
-  </main>
+        <div class="wrap"><div class="divider"></div></div>
 
-  <!-- ── DONE BAR ── -->
-  <div id="done-bar" class="shelf shelf--done" data-zone="done">
-    <div class="shelf__header" id="done-toggle">
-      <div class="shelf__header-left">
-        <span class="shelf__icon shelf__icon--done">✓</span>
-        <span class="shelf__label">DONE</span>
-        <span class="shelf__count" id="done-count">0</span>
-      </div>
-      <div class="shelf__header-right">
-        <span class="shelf__hint">click to expand</span>
-        <span class="shelf__chevron" id="done-chevron">▴</span>
-      </div>
-    </div>
-    <div class="shelf__body shelf__body--done" id="done-body">
-      <div class="shelf__cards" id="done-cards"></div>
-      <div class="shelf__empty" id="done-empty">Drag completed cards here</div>
-    </div>
-    <div class="drop-overlay" id="done-drop-overlay">
-      <span class="drop-overlay__icon">✓</span><span>MARK DONE</span>
-    </div>
-  </div>
+        <section id="sync">
+            <div class="wrap">
+                <div class="section-head">
+                    <div class="eyebrow mono">Sign in once</div>
+                    <h2>Sync everywhere, without a new password.</h2>
+                    <p>One Google sign-in, and your boards follow you — nothing to configure, nothing shared with other apps.</p>
+                </div>
+                <div class="chain">
+                    <div class="chain-node">
+                        <h4>Sign in with Google</h4>
+                        <p>One click, no new account or password to remember.</p>
+                    </div>
+                    <div class="chain-arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></div>
+                    <div class="chain-node">
+                        <h4>Private app folder</h4>
+                        <p>Boards live in your Drive's private appDataFolder — invisible to other apps, untouched by ours.</p>
+                    </div>
+                    <div class="chain-arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></div>
+                    <div class="chain-node">
+                        <h4>Auto-save</h4>
+                        <p>Every drag, edit or new card saves to Drive shortly after you stop.</p>
+                    </div>
+                    <div class="chain-arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></div>
+                    <div class="chain-node">
+                        <h4>Any device</h4>
+                        <p>Open Taskboards anywhere and sign in — your boards are already there.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
 
-  <div id="drag-ghost" class="drag-ghost"></div>
+        <div class="wrap"><div class="divider"></div></div>
 
-  <button id="fab" class="fab" title="New card (Ctrl+Enter)">
-    <span class="fab__icon">+</span>
-  </button>
+        <section id="start">
+            <div class="wrap">
+                <div class="section-head">
+                    <div class="eyebrow mono">Get started</div>
+                    <h2>Sign in and start dragging cards.</h2>
+                    <p>One Google account — no new password, no setup screen, no server of ours holding onto your data.</p>
+                </div>
+                <div class="download-grid download-grid--single">
+                    <div class="download-card primary">
+                        <svg class="platform-icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#ffffff"/>
+                            <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#ffffffcc"/>
+                            <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#ffffff99"/>
+                            <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#ffffffcc"/>
+                        </svg>
+                        <h3>Continue with Google</h3>
+                        <p>Sign in and every board saves straight to a private folder in your own Drive. Free, no setup, nothing stored on our end.</p>
+                        <a class="btn btn-primary" href="app.html">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4M10 17l5-5-5-5M15 12H3"/></svg>
+                            Continue with Google
+                        </a>
+                        <div class="file-meta">
+                            <span>Google Drive · appDataFolder only</span>
+                            <span>Free forever</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
 
-  <!-- ── NEW CARD MODAL ── -->
-  <div id="modal-overlay" class="modal-overlay hidden">
-    <div class="modal" id="modal">
-      <div class="modal__header">
-        <span class="modal__title">NEW CARD</span>
-        <button class="modal__close" id="modal-close">✕</button>
-      </div>
-      <div class="modal__body">
-        <div class="modal__field">
-          <label class="modal__label" for="input-title">TITLE *</label>
-          <input class="modal__input" id="input-title" type="text" placeholder="Task name..." maxlength="80" autocomplete="off" />
+    <footer>
+        <div class="wrap footer-inner">
+            <span>&copy; 2026 Taskboards &middot; vibe coded by <a href="https://www.linkedin.com/in/dferreiramarques/" target="_blank" rel="noopener">David Marques</a> &middot; MIT License</span>
+            <div class="footer-links">
+                <a href="https://github.com/dferreiramarques/taskboards" target="_blank" rel="noopener">GitHub</a>
+                <a href="https://ko-fi.com/dferreiramarques" target="_blank" rel="noopener">Support on Ko-fi</a>
+                <a href="app.html">Open the app</a>
+            </div>
         </div>
-        <div class="modal__field">
-          <label class="modal__label" for="input-owner">OWNER</label>
-          <input class="modal__input" id="input-owner" type="text" placeholder="Assignee name..." maxlength="40" autocomplete="off" list="owner-datalist" />
-          <datalist id="owner-datalist"></datalist>
-          <div class="owner-chips" id="owner-chips"></div>
-        </div>
-        <div class="modal__field">
-          <label class="modal__label" for="input-date">DUE DATE</label>
-          <input class="modal__input modal__input--date" id="input-date" type="date" />
-        </div>
-        <div class="modal__field">
-          <label class="modal__label">STARTING COLUMN</label>
-          <div class="modal__toggle">
-            <button class="modal__toggle-btn active" data-col="todo">TO DO</button>
-            <button class="modal__toggle-btn" data-col="inprogress">IN PROGRESS</button>
-          </div>
-        </div>
-      </div>
-      <div class="modal__footer">
-        <button class="modal__submit" id="modal-submit">CREATE CARD →</button>
-      </div>
-    </div>
-  </div>
+    </footer>
 
-  <!-- ── HELP MODAL ── -->
-  <div id="help-overlay" class="modal-overlay hidden">
-    <div class="modal modal--help" id="help-modal">
-      <div class="modal__header">
-        <span class="modal__title">HOW IT WORKS</span>
-        <button class="modal__close" id="help-close">✕</button>
-      </div>
-      <div class="help__body">
-        <div class="help__section">
-          <div class="help__row">
-            <span class="help__icon help__icon--archive">◈</span>
-            <div><strong>Archive bar</strong> — Idea bank at the top. Drag cards here to park them. Click to expand/browse. Drag back to reactivate.</div>
-          </div>
-          <div class="help__row">
-            <span class="help__icon help__icon--todo">○</span>
-            <div><strong>To Do</strong> — Your backlog. Cards show title, owner, and due date.</div>
-          </div>
-          <div class="help__row">
-            <span class="help__icon help__icon--inprog">◑</span>
-            <div><strong>In Progress</strong> — Drag cards between columns to change their status.</div>
-          </div>
-          <div class="help__row">
-            <span class="help__icon help__icon--done">✓</span>
-            <div><strong>Done bar</strong> — Completed tasks. Click to expand and review.</div>
-          </div>
-        </div>
-        <div class="help__divider"></div>
-        <div class="help__section">
-          <div class="help__row">
-            <span class="help__icon">⊞</span>
-            <div><strong>Multiple boards</strong> — Click <strong>+</strong> in the boards bar to add a board. Double-click a tab to rename it. Use <strong>‹ ›</strong> to paginate when you have many boards.</div>
-          </div>
-          <div class="help__row">
-            <span class="help__icon">☁</span>
-            <div><strong>Google Drive sync</strong> — Sign in with Google to save all boards to your Drive automatically. Data is stored in a private app folder only this app can access.</div>
-          </div>
-          <div class="help__row">
-            <span class="help__icon">✦</span>
-            <div><strong>New card</strong> — Click the <strong>+</strong> button or press <kbd>Ctrl</kbd> + <kbd>Enter</kbd>.</div>
-          </div>
-          <div class="help__row">
-            <span class="help__icon" style="color:#ef4444">✕</span>
-            <div><strong>Delete a card</strong> — Double-click on a card. A red ✕ badge appears — click it to delete. Click elsewhere to cancel.</div>
-          </div>
-        </div>
-        <div class="help__divider"></div>
-        <div class="help__tip">
-          📅 <strong>Red date</strong> = overdue &nbsp;·&nbsp; <strong>Orange date</strong> = due in ≤3 days &nbsp;·&nbsp; Data auto-saves to localStorage (or Google Drive when signed in).
-        </div>
-        <div class="help__credit">
-          vibe coded by
-          <a href="https://www.linkedin.com/in/dferreiramarques/" target="_blank" rel="noopener">David Marques</a>
-          &nbsp;·&nbsp;
-          <a href="https://ko-fi.com/dferreiramarques" target="_blank" rel="noopener">☕ ko-fi</a>
-        </div>
-      </div>
-    </div>
-  </div>
+    <script>
+        (function () {
+            var moon = 'M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79Z';
+            var sun = 'M12 3v2m0 14v2m9-9h-2M5 12H3m15.36 6.36-1.41-1.41M7.05 7.05 5.64 5.64m12.72 0-1.41 1.41M7.05 16.95l-1.41 1.41';
+            var icon = document.getElementById('themeIcon');
+            var btn = document.getElementById('themeToggle');
 
-  <script src="./app.js"></script>
+            function paint() {
+                var mode = document.documentElement.getAttribute('data-theme');
+                var isDark = mode === 'dark' || (mode !== 'light' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+                if (isDark) {
+                    icon.innerHTML = '<path d="' + sun + '"/><circle cx="12" cy="12" r="4"/>';
+                } else {
+                    icon.innerHTML = '<path d="' + moon + '"/>';
+                }
+            }
 
+            btn.addEventListener('click', function () {
+                var current = document.documentElement.getAttribute('data-theme') || 'dark';
+                var next = current === 'dark' ? 'light' : 'dark';
+                document.documentElement.setAttribute('data-theme', next);
+                localStorage.setItem('taskboards-theme', next);
+                paint();
+            });
+
+            paint();
+        })();
+    </script>
 </body>
 </html>
