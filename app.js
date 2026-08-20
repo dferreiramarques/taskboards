@@ -1,7 +1,7 @@
 'use strict';
 
 // ─── VERSION ─────────────────────────────────────────────────────────────────
-const APP_VERSION = '3.2.2'; // sign-out redirects back to the landing page
+const APP_VERSION = '3.3.1'; // fix unique-sign-in counter: plain insert, not upsert (RLS + ON CONFLICT DO UPDATE requires both INSERT and UPDATE policies to pass even without a real conflict)
 console.log('%c TaskBoards v' + APP_VERSION + ' loaded', 'background:#ffa300;color:#000;padding:2px 8px;border-radius:4px;font-weight:bold');
 
 // ─── CONFIG & CONSTANTS ───────────────────────────────────────────────────────
@@ -11,6 +11,9 @@ const DRIVE_FILENAME    = 'taskboards-data.json';
 const DRIVE_FOLDER      = 'appDataFolder';
 const DRIVE_API         = 'https://www.googleapis.com/drive/v3';
 const DRIVE_UPLOAD_API  = 'https://www.googleapis.com/upload/drive/v3';
+
+const SUPABASE_URL      = (window.TASKBOARDS_CONFIG || {}).SUPABASE_URL || '';
+const SUPABASE_ANON_KEY = (window.TASKBOARDS_CONFIG || {}).SUPABASE_ANON_KEY || '';
 
 const LS_BOARDS    = 'taskboards-v1-boards';
 const LS_CURRENT   = 'taskboards-v1-current';
@@ -499,6 +502,32 @@ function showAuthGate() { q('#auth-gate').classList.remove('hidden'); }
 function hideAuthGate() { q('#auth-gate').classList.add('hidden'); }
 function setGateStatus(msg) { q('#gate-status').textContent = msg || ''; }
 
+// ─── ANONYMOUS UNIQUE-SIGN-IN COUNTER ────────────────────────────────────────
+// Records that *some* Google account signed in — never which one. The Google
+// account id is hashed client-side before it ever leaves the browser, so we
+// (and Supabase) only ever see an irreversible hash, never the email or name.
+async function pingUniqueUser() {
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !gUser?.sub) return;
+  try {
+    const bytes = new TextEncoder().encode(gUser.sub);
+    const digest = await crypto.subtle.digest('SHA-256', bytes);
+    const userHash = Array.from(new Uint8Array(digest)).map(b => b.toString(16).padStart(2, '0')).join('');
+
+    // Plain insert, not an upsert — the primary key rejects repeat sign-ins
+    // (409, ignored below) so each hash is only ever recorded once.
+    await fetch(`${SUPABASE_URL}/rest/v1/users_seen`, {
+      method: 'POST',
+      headers: {
+        'apikey': SUPABASE_ANON_KEY,
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+        'Content-Type': 'application/json',
+        'Prefer': 'return=minimal'
+      },
+      body: JSON.stringify([{ user_hash: userHash }])
+    });
+  } catch (e) { console.warn('unique-user ping failed (non-fatal):', e); }
+}
+
 // ─── GOOGLE IDENTITY SERVICES ────────────────────────────────────────────────
 function initGSI() {
   if (!GOOGLE_CLIENT_ID) {
@@ -553,6 +582,7 @@ async function handleTokenResponse(resp) {
     console.log('Logged in as:', gUser.email);
   } catch (e) { console.warn('userinfo failed', e); }
 
+  pingUniqueUser(); // fire-and-forget anonymous sign-in counter
   showUserPill();
 
   // Always try to load from Drive — Drive is the source of truth when logged in
