@@ -1,7 +1,7 @@
 'use strict';
 
 // ─── VERSION ─────────────────────────────────────────────────────────────────
-const APP_VERSION = '3.2.0'; // mandatory Google sign-in gate, no more local-only mode
+const APP_VERSION = '3.2.2'; // sign-out redirects back to the landing page
 console.log('%c TaskBoards v' + APP_VERSION + ' loaded', 'background:#ffa300;color:#000;padding:2px 8px;border-radius:4px;font-weight:bold');
 
 // ─── CONFIG & CONSTANTS ───────────────────────────────────────────────────────
@@ -615,9 +615,11 @@ function handleLogout() {
   closeUserMenu();
   q('#user-pill').classList.add('hidden');
   setSyncStatus('', 'Offline');
-  renderTabs();
-  renderBoard();
   showAuthGate();
+
+  // Back to the landing page — signing out means leaving the app, not just
+  // re-showing the gate on top of it.
+  location.href = './index.html';
 }
 
 q('#logout-btn')?.addEventListener('click', handleLogout);
@@ -1289,14 +1291,19 @@ document.addEventListener('keydown', e=>{
 
 // ─── SERVICE WORKER ──────────────────────────────────────────────────────────
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('./sw.js').then(reg => {
-    // Force check for updates immediately so new app.js is served
+  // Cache-bust the registration URL on every version bump — some hosts
+  // (e.g. GitHub Pages) cache sw.js itself for a few minutes, which would
+  // otherwise hide new deploys from reg.update() until that cache expires.
+  navigator.serviceWorker.register(`./sw.js?v=${APP_VERSION}`).then(reg => {
+    // Force check for updates immediately so new assets are served
     reg.update().catch(() => {});
   }).catch(() => {});
 
-  // If a new SW is waiting, activate it immediately (skip waiting)
+  // If a new SW takes over, reload once to get fresh assets
+  let swRefreshing = false;
   navigator.serviceWorker.addEventListener('controllerchange', () => {
-    // New SW took over — reload once to get fresh assets
+    if (swRefreshing) return;
+    swRefreshing = true;
     window.location.reload();
   });
 }
