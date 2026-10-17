@@ -25,7 +25,7 @@ window.TASKBOARDS_CONFIG = {
   // without Google re-asking every hour. It never sees or stores your boards.
   // Leave blank to use Google's browser-only sign-in (re-auth about every hour).
   // Must share a "site" with this page, e.g. https://auth.monco.io for taskboards.monco.io.
-  AUTH_API: '',
+  AUTH_API: location.hostname.endsWith('monco.io') ? 'https://auth.monco.io' : '',
 
   // ─── Anonymous unique-sign-in counter (optional) ──────────────────────────
   // Not a secret — this key can only insert/update a one-way hash of the

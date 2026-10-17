@@ -103,7 +103,7 @@ Google’s browser-only sign-in only gives 1-hour tokens, so without this the ap
 
 **Set it up (one time)**
 
-1. **Deploy this repo on Railway** (see below — any Node host works) and give the service a custom domain **on the same site as the app** — e.g. `auth.monco.io` for `taskboards.monco.io`. In Railway: service → **Settings → Networking → Custom Domain**, then add the CNAME it shows at your DNS. Same site is what keeps the cookie first-party, so browsers don’t block it.
+1. **Use the Railway service that already deploys this repo** (see below) — it serves `/auth/*` by itself, no second service needed. Give it a custom domain **on the same site as the app** — e.g. `auth.monco.io` for `taskboards.monco.io`: Railway → **Settings → Networking → Custom Domain**, then add the CNAME it shows at your DNS. (Its default `*.up.railway.app` address is a different site, so cookies set there would be third-party and get blocked.) Same site is what keeps the cookie first-party, so browsers don’t block it.
 2. **Google Cloud Console → Credentials → your OAuth client**: add the authorized redirect URI `https://auth.monco.io/auth/callback`, and copy the **Client secret**.
 3. **Set these environment variables** in Railway → **Variables** (see `.env.example`):
 
@@ -115,8 +115,14 @@ Google’s browser-only sign-in only gives 1-hour tokens, so without this the ap
    | `AUTH_BASE_URL` | `https://auth.monco.io` |
    | `APP_ORIGIN` | `https://taskboards.monco.io` (comma-separate more origins) |
 
-4. Set `AUTH_API: 'https://auth.monco.io'` in `config.js` and push.
+4. In `config.js` set the URL, only for the real domain so other hosts (like the `*.up.railway.app` copy) keep using the browser-only sign-in:
+   ```js
+   AUTH_API: location.hostname.endsWith('monco.io') ? 'https://auth.monco.io' : '',
+   ```
+   then push.
 5. In the OAuth consent screen, publishing status must be **In production** (in *Testing*, Google expires refresh tokens after 7 days).
+
+> Prefer one host for everything? Point `taskboards.monco.io` itself at the Railway service (instead of GitHub Pages) and set `AUTH_BASE_URL` and `APP_ORIGIN` to that same URL — then no second domain is needed.
 
 > Railway keeps the service running (unless you turn on *App Sleeping*), so there is no cold start. On a host that sleeps when idle, the first sign-in after a quiet spell can take ~30 s.
 
@@ -126,7 +132,7 @@ Google’s browser-only sign-in only gives 1-hour tokens, so without this the ap
 
 1. Fork or push this repo to GitHub
 2. [railway.app](https://railway.app) → **New Project → Deploy from GitHub repo**
-3. Variables: none needed for the app itself — the Client ID lives in `public/config.js`. The optional session server needs the variables listed above
+3. Variables: none needed for the app itself — the Client ID lives in `public/config.js`. Without the variables listed above, `/auth/status` answers `{"enabled":false}` and the app uses the browser-only sign-in
 4. Railway auto-deploys on every push to `main`
 
 ---
