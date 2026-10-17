@@ -1150,6 +1150,9 @@ kbd {
 .login-btn--gate .login-btn__icon { width: 18px; height: 18px; }
 
 .auth-gate__status { font-size: .78rem; color: var(--f-fg4); min-height: 1em; }
+.auth-gate__link { background: none; border: 0; padding: 4px 8px; color: var(--f-fg3); font: inherit; font-size: .8rem; cursor: pointer; text-decoration: underline; }
+.auth-gate__link:hover { color: var(--f-fg1); }
+.auth-gate__link.hidden { display: none; }
 
 .user-pill {
   position: relative;

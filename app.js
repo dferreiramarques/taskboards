@@ -1,12 +1,13 @@
 'use strict';
 
 // ─── VERSION ─────────────────────────────────────────────────────────────────
-const APP_VERSION = '3.3.1'; // fix unique-sign-in counter: plain insert, not upsert (RLS + ON CONFLICT DO UPDATE requires both INSERT and UPDATE policies to pass even without a real conflict)
+const APP_VERSION = '3.4.0'; // sturdier sign-in: token renewal, no save after a failed load, retry/flush/conflict-safe Drive sync
 console.log('%c TaskBoards v' + APP_VERSION + ' loaded', 'background:#ffa300;color:#000;padding:2px 8px;border-radius:4px;font-weight:bold');
 
 // ─── CONFIG & CONSTANTS ───────────────────────────────────────────────────────
 const GOOGLE_CLIENT_ID  = (window.TASKBOARDS_CONFIG || {}).GOOGLE_CLIENT_ID || '';
-const DRIVE_SCOPE       = 'https://www.googleapis.com/auth/drive.appdata openid email profile';
+const DRIVE_APPDATA     = 'https://www.googleapis.com/auth/drive.appdata';
+const DRIVE_SCOPE       = `${DRIVE_APPDATA} openid email profile`;
 const DRIVE_FILENAME    = 'taskboards-data.json';
 const DRIVE_FOLDER      = 'appDataFolder';
 const DRIVE_API         = 'https://www.googleapis.com/drive/v3';
@@ -20,6 +21,12 @@ const LS_CURRENT   = 'taskboards-v1-current';
 const LS_THEME     = 'taskboards-theme';
 const LS_OWNERS    = 'taskboards-owners';
 const LS_DRIVE_FID = 'taskboards-drive-fileid';
+const LS_DIRTY     = 'taskboards-dirty';          // unsynced local edits
+const LS_BASE      = 'taskboards-drive-base';     // Drive modifiedTime our copy is based on
+const LS_HINT      = 'taskboards-login-hint';     // last signed-in profile (no secrets)
+const LS_SUB       = 'taskboards-user-sub';       // owner of the boards in localStorage
+const SS_TOKEN     = 'taskboards-token';          // this tab's access token (sessionStorage)
+const TOKEN_SKEW_MS = 5 * 60 * 1000;                // renew this long before expiry
 
 // Safe localStorage read — treats "null"/"undefined" as missing
 function lsGet(key) {
@@ -107,20 +114,6 @@ function saveToLocal() {
 }
 
 // ─── OWNER HISTORY ────────────────────────────────────────────────────────────
-function loadOwners() {
-  try { return JSON.parse(localStorage.getItem(LS_OWNERS)) || []; } catch { return []; }
-}
-function saveOwner(name) {
-  if (!name?.trim()) return;
-  const owners = loadOwners();
-  const t = name.trim();
-  if (!owners.includes(t)) {
-    owners.unshift(t);
-    if (owners.length > 20) owners.pop();
-    localStorage.setItem(LS_OWNERS, JSON.stringify(owners));
-  }
-  refreshOwnerUI();
-}
 function loadOwners() {
   try { return JSON.parse(localStorage.getItem(LS_OWNERS)) || []; } catch { return []; }
 }
@@ -251,220 +244,209 @@ function renderOwnerFilterChips() {
 }
 
 // ─── GOOGLE DRIVE ────────────────────────────────────────────────────────────
-function driveHeaders(contentType = 'application/json') {
-  return { 'Authorization': `Bearer ${gAccessToken}`, 'Content-Type': contentType };
+// Sync model: localStorage is the working copy, Drive is the durable copy.
+//  • changeSeq/savedSeq track unsynced edits; LS_DIRTY survives a closed tab.
+//  • driveModified (mirrored in LS_BASE) is the Drive version our copy is based
+//    on — if Drive has moved on since, we ask instead of silently overwriting.
+//  • A failed or ambiguous load never leads to a save (driveReady stays false),
+//    so a network blip can't replace the user's boards with an empty board.
+class AuthError extends Error {}
+
+let changeSeq     = 0;
+let savedSeq      = 0;
+let driveReady    = false;            // true once we know what is in Drive
+let driveModified = lsGet(LS_BASE);   // Drive modifiedTime our copy is based on
+let saving        = false;
+let saveQueued    = false;
+let retryTimer    = null;
+let retryDelay    = 0;
+
+const isDirty   = () => changeSeq !== savedSeq;
+function markDirty() { changeSeq++; lsSet(LS_DIRTY, '1'); }
+function setDriveModified(t) {
+  driveModified = t || null;
+  if (t) lsSet(LS_BASE, t); else lsDel(LS_BASE);
 }
 
+// Authenticated fetch: always uses a fresh token and retries once on a 401.
+async function driveFetch(url, opts = {}, canRetry = true) {
+  const token = await ensureToken();
+  if (!token) throw new AuthError('Session expired');
+  const r = await fetch(url, { ...opts, headers: { ...(opts.headers || {}), Authorization: `Bearer ${token}` } });
+  if (r.status === 401) {
+    if (!canRetry) throw new AuthError('Session expired');
+    gTokenExpiry = 0; // Google rejected the token — force a refresh
+    return driveFetch(url, opts, false);
+  }
+  return r;
+}
+
+// Resolves the newest {id, modifiedTime} or null when no file exists yet.
 async function driveFindFile() {
-  // Search by name in appDataFolder
   const url = `${DRIVE_API}/files?spaces=${DRIVE_FOLDER}&fields=files(id,name,modifiedTime)&q=name%3D'${DRIVE_FILENAME}'`;
-  const r   = await fetch(url, { headers: driveHeaders() });
+  const r = await driveFetch(url);
+  if (!r.ok) throw new Error(`find ${r.status}`);
+  const { files } = await r.json();
+  if (!files?.length) return null;
+  return files.sort((a, b) => new Date(b.modifiedTime) - new Date(a.modifiedTime))[0];
+}
+
+// Resolves {data, modifiedTime}, or null when the user has no file yet.
+// Throws on any failure — callers must never treat an error as "empty".
+async function driveLoadData() {
+  const file = await driveFindFile();
+  if (!file) { driveFileId = null; lsDel(LS_DRIVE_FID); return null; }
+  driveFileId = file.id;
+  lsSet(LS_DRIVE_FID, file.id);
+  const r = await driveFetch(`${DRIVE_API}/files/${file.id}?alt=media`);
+  if (!r.ok) throw new Error(`load ${r.status}`);
+  const data = await r.json();
+  if (!Array.isArray(data?.boards)) throw new Error('unexpected file format');
+  return { data, modifiedTime: file.modifiedTime };
+}
+
+// Replace the in-memory boards with what Drive holds.
+function applyRemote({ data, modifiedTime }) {
+  boards = data.boards.length ? data.boards : [defaultBoard()];
+  currentBoardId = boards.find(b => b.id === data.currentBoardId) ? data.currentBoardId : boards[0].id;
+  tabPage = Math.min(tabPage, Math.floor((boards.length - 1) / dynamicTabsPerPage));
+  saveToLocal();
+  setDriveModified(modifiedTime);
+  savedSeq = changeSeq;
+  lsDel(LS_DIRTY);
+  renderTabs();
+  renderOwnerFilterChips();
+  renderBoard();
+}
+
+function keepLocalOnConflict() {
+  return confirm(
+    'Your boards were changed somewhere else (another device, or unsaved edits here).\n\n' +
+    'OK = keep THIS device’s version and overwrite Drive\n' +
+    'Cancel = load the version from Drive'
+  );
+}
+
+// One save attempt. Throws on failure; resolves quietly if Drive's version won.
+async function driveWrite() {
+  const seq     = changeSeq;
+  const payload = JSON.stringify({ boards, currentBoardId, savedAt: Date.now() });
+
+  let file = driveFileId ? { id: driveFileId } : await driveFindFile();
+  if (file) {
+    // Has Drive moved on since we last synced?
+    const m = await driveFetch(`${DRIVE_API}/files/${file.id}?fields=modifiedTime`);
+    if (m.status === 404) {
+      file = null; driveFileId = null; lsDel(LS_DRIVE_FID); setDriveModified(null);
+    } else if (!m.ok) {
+      throw new Error(`check ${m.status}`);
+    } else {
+      const { modifiedTime } = await m.json();
+      if (!driveModified || Date.parse(modifiedTime) > Date.parse(driveModified)) {
+        if (!keepLocalOnConflict()) {
+          const remote = await driveLoadData();
+          if (remote) { applyRemote(remote); return; }
+          file = null;
+        }
+      }
+    }
+  }
+
+  let r;
+  if (file) {
+    r = await driveFetch(`${DRIVE_UPLOAD_API}/files/${file.id}?uploadType=media&fields=id,modifiedTime`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: payload,
+      keepalive: payload.length < 60000   // lets the last save survive a closing tab
+    });
+    if (r.status === 404) {
+      driveFileId = null; lsDel(LS_DRIVE_FID); setDriveModified(null);
+      throw new Error('file moved, retrying');
+    }
+  } else {
+    const boundary = 'taskboards_boundary_' + Date.now();
+    const body = [
+      `--${boundary}`,
+      'Content-Type: application/json; charset=UTF-8',
+      '',
+      JSON.stringify({ name: DRIVE_FILENAME, parents: [DRIVE_FOLDER] }),
+      `--${boundary}`,
+      'Content-Type: application/json',
+      '',
+      payload,
+      `--${boundary}--`
+    ].join('\r\n');
+    r = await driveFetch(`${DRIVE_UPLOAD_API}/files?uploadType=multipart&fields=id,modifiedTime`, {
+      method: 'POST',
+      headers: { 'Content-Type': `multipart/related; boundary=${boundary}` },
+      body
+    });
+  }
+
   if (!r.ok) {
     const err = await r.json().catch(() => ({}));
-    console.error('driveFindFile failed:', r.status, err?.error?.message);
-    return null;
+    throw new Error(`save ${r.status}: ${err?.error?.message || r.statusText}`);
   }
-  const data = await r.json();
-  console.log('driveFindFile results:', data.files);
-  // If multiple copies somehow exist, take the most recently modified
-  if (!data.files?.length) return null;
-  return data.files.sort((a, b) => new Date(b.modifiedTime) - new Date(a.modifiedTime))[0].id;
-}
-
-async function driveLoadData() {
-  setSyncStatus('syncing', 'Loading from Drive…');
-  showSkeleton(true);
-  try {
-    // Always search by name — never use a potentially stale/undefined cached ID
-    const fid = await driveFindFile();
-    if (!fid) {
-      console.log('driveLoadData: no file in Drive yet');
-      setSyncStatus('synced', 'Drive ready');
-      driveFileId = null;
-      lsDel(LS_DRIVE_FID);
-      showSkeleton(false);
-      showToast('Ready to save to Drive', 'info');
-      return null;
-    }
-    driveFileId = fid;
-    lsSet(LS_DRIVE_FID, fid);
-
-    console.log('driveLoadData: fetching file', fid);
-    const r = await fetch(`${DRIVE_API}/files/${fid}?alt=media`, {
-      headers: { 'Authorization': `Bearer ${gAccessToken}` }
-    });
-    if (!r.ok) {
-      const text = await r.text().catch(() => '');
-      console.error('driveLoadData fetch failed:', r.status, text);
-      if (r.status === 404) { driveFileId = null; lsDel(LS_DRIVE_FID); }
-      throw new Error(`HTTP ${r.status}`);
-    }
-
-    const data = await r.json();
-    console.log('driveLoadData success — boards:', data.boards?.length, 'savedAt:', data.savedAt ? new Date(data.savedAt).toLocaleString() : 'unknown');
-    setSyncStatus('synced', 'Loaded from Drive ✓');
-    showSkeleton(false);
-    showToast(`Loaded ${data.boards?.length || 0} boards`, 'success');
-    return data;
-  } catch (err) {
-    console.error('driveLoadData error:', err.message);
-    setSyncStatus('error', `Load failed — ${err.message}`);
-    showSkeleton(false);
-    showToast('Failed to load from Drive', 'error');
-    return null;
-  }
+  const res = await r.json();
+  if (!res.id) throw new Error('No file ID in response');
+  driveFileId = res.id;
+  lsSet(LS_DRIVE_FID, res.id);
+  setDriveModified(res.modifiedTime);
+  savedSeq = seq;                       // edits made mid-save stay dirty
+  if (seq === changeSeq) lsDel(LS_DIRTY);
 }
 
 async function driveSaveData() {
-  if (!gAccessToken) return;
+  if (!driveReady || needsReauth) return;
+  if (saving) { saveQueued = true; return; }
+  if (!isDirty()) return;
+  saving = true;
+  clearTimeout(retryTimer);
   setSyncStatus('syncing', 'Saving…');
-  const payload = JSON.stringify({ boards, currentBoardId, savedAt: Date.now() });
-
   try {
-    let fid = driveFileId || await driveFindFile();
-    let r;
-
-    if (fid) {
-      // Update existing file
-      r = await fetch(`${DRIVE_UPLOAD_API}/files/${fid}?uploadType=media`, {
-        method: 'PATCH',
-        headers: { 'Authorization': `Bearer ${gAccessToken}`, 'Content-Type': 'application/json' },
-        body: payload
-      });
-      if (r.status === 404) {
-        // File was deleted from Drive — clear ID and create fresh
-        console.warn('Drive file 404 on update, recreating…');
-        driveFileId = null; fid = null;
-        lsDel(LS_DRIVE_FID);
-      }
-    }
-
-    if (!fid) {
-      // Create new file in appDataFolder
-      const boundary = 'tb_' + Date.now();
-      const body = [
-        `--${boundary}`,
-        'Content-Type: application/json; charset=UTF-8',
-        '',
-        JSON.stringify({ name: DRIVE_FILENAME, parents: [DRIVE_FOLDER] }),
-        `--${boundary}`,
-        'Content-Type: application/json',
-        '',
-        payload,
-        `--${boundary}--`
-      ].join('\r\n');
-
-      r = await fetch(`${DRIVE_UPLOAD_API}/files?uploadType=multipart&fields=id`, {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${gAccessToken}`, 'Content-Type': `multipart/related; boundary=${boundary}` },
-        body
-      });
-
-      if (!r.ok) {
-        const err = await r.json().catch(() => ({}));
-        throw new Error(`create ${r.status}: ${err?.error?.message || r.statusText}`);
-      }
-      const res = await r.json();
-      if (!res.id) throw new Error('No file ID in create response');
-      driveFileId = res.id;
-      lsSet(LS_DRIVE_FID, driveFileId);
-      console.log('driveCreate success, id:', driveFileId);
-      setSyncStatus('synced', 'Saved to Drive ✓');
-      return;
-    }
-
-    if (!r.ok) {
-      const err = await r.json().catch(() => ({}));
-      throw new Error(`update ${r.status}: ${err?.error?.message || r.statusText}`);
-    }
-
-    console.log('driveSave success');
-    setSyncStatus('synced', 'Saved to Drive ✓');
-  } catch (err) {
-    console.error('driveSaveData error:', err.message);
-    setSyncStatus('error', `Save failed — ${err.message}`);
-  }
-}
-
-async function driveSaveData() {
-  if (!gAccessToken) return;
-  setSyncStatus('syncing', 'Saving…');
-  const payload = JSON.stringify({ boards, currentBoardId, savedAt: Date.now() });
-  try {
-    let fid = driveFileId || await driveFindFile();
-    let r;
-
-    if (fid) {
-      // Update existing file — simple media upload
-      r = await fetch(`${DRIVE_UPLOAD_API}/files/${fid}?uploadType=media`, {
-        method: 'PATCH',
-        headers: { 'Authorization': `Bearer ${gAccessToken}`, 'Content-Type': 'application/json' },
-        body: payload
-      });
-    } else {
-      // Create new file in appDataFolder — use multipart with correct boundary
-      const boundary = 'taskboards_boundary_' + Date.now();
-      const body = [
-        `--${boundary}`,
-        'Content-Type: application/json; charset=UTF-8',
-        '',
-        JSON.stringify({ name: DRIVE_FILENAME, parents: [DRIVE_FOLDER] }),
-        `--${boundary}`,
-        'Content-Type: application/json',
-        '',
-        payload,
-        `--${boundary}--`
-      ].join('\r\n');
-
-      r = await fetch(`${DRIVE_UPLOAD_API}/files?uploadType=multipart&fields=id`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${gAccessToken}`,
-          'Content-Type': `multipart/related; boundary=${boundary}`
-        },
-        body
-      });
-
-      if (!r.ok) {
-        const err = await r.json().catch(() => ({}));
-        console.error('Drive create failed:', r.status, err);
-        throw new Error(`create ${r.status}: ${err?.error?.message || r.statusText}`);
-      }
-
-      const res = await r.json();
-      if (!res.id) throw new Error('No file ID returned');
-      driveFileId = res.id;
-      lsSet(LS_DRIVE_FID, driveFileId);
-      setSyncStatus('synced', 'Saved to Drive ✓');
-      showToast('Saved to Drive', 'success');
-      return;
-    }
-
-    if (!r.ok) {
-      const err = await r.json().catch(() => ({}));
-      console.error('Drive save failed:', r.status, err);
-      // If 404 (file deleted from Drive), clear cached ID and retry once
-      if (r.status === 404) {
-        driveFileId = null;
-        lsDel(LS_DRIVE_FID);
-        console.warn('Drive file gone, will recreate on next save');
-        scheduleDriveSave();
-        return;
-      }
-      throw new Error(`save ${r.status}: ${err?.error?.message || r.statusText}`);
-    }
-
+    await driveWrite();
+    retryDelay = 0;
     setSyncStatus('synced', 'Saved to Drive ✓');
   } catch (err) {
     console.error('Drive save error:', err.message);
-    setSyncStatus('error', `Save failed — ${err.message}`);
-    showToast('Save failed', 'error');
+    if (err instanceof AuthError) {
+      setSyncStatus('error', 'Session expired');
+      requestReconnect();
+    } else {
+      // Network/5xx: keep the edits, retry with backoff (also on `online`)
+      retryDelay = Math.min((retryDelay || 2000) * 2, 60000);
+      retryTimer = setTimeout(driveSaveData, retryDelay);
+      setSyncStatus('error', 'Save failed — retrying…');
+    }
+  } finally {
+    saving = false;
+    if (saveQueued) { saveQueued = false; scheduleDriveSave(); }
   }
 }
 
 function scheduleDriveSave() {
   clearTimeout(saveTimer);
   saveTimer = setTimeout(driveSaveData, SAVE_DEBOUNCE);
+}
+
+function flushSave() {
+  if (!driveReady || !isDirty()) return;
+  clearTimeout(saveTimer);
+  driveSaveData();
+}
+
+// Pull in edits made on another device (called when the tab comes back).
+async function driveRefreshIfNewer() {
+  if (!driveReady || saving || isDirty() || !driveFileId) return;
+  try {
+    const m = await driveFetch(`${DRIVE_API}/files/${driveFileId}?fields=modifiedTime`);
+    if (!m.ok) return;
+    const { modifiedTime } = await m.json();
+    if (Date.parse(modifiedTime) <= Date.parse(driveModified || 0)) return;
+    const remote = await driveLoadData();
+    if (remote && !isDirty()) { applyRemote(remote); showToast('Updated from another device', 'info'); }
+  } catch (e) { console.warn('refresh check failed (non-fatal):', e.message); }
 }
 
 function setSyncStatus(state, label) {
@@ -502,6 +484,28 @@ function showAuthGate() { q('#auth-gate').classList.remove('hidden'); }
 function hideAuthGate() { q('#auth-gate').classList.add('hidden'); }
 function setGateStatus(msg) { q('#gate-status').textContent = msg || ''; }
 
+// A returning user sees "Continue as <email>" instead of a cold sign-in.
+function renderGate() {
+  const label = q('#gate-login-btn .login-btn__label');
+  const alt   = q('#gate-switch-btn');
+  if (loginHint?.email) {
+    label.textContent = `Continue as ${loginHint.email}`;
+    alt?.classList.remove('hidden');
+  } else {
+    label.textContent = 'Continue with Google';
+    alt?.classList.add('hidden');
+  }
+}
+
+// The session can't be renewed silently — ask for one click. Edits stay safe in
+// localStorage and are uploaded as soon as the user reconnects.
+function requestReconnect() {
+  needsReauth = true;
+  renderGate();
+  setGateStatus('Your Google session expired. Reconnect to keep syncing — your changes are safe on this device.');
+  showAuthGate();
+}
+
 // ─── ANONYMOUS UNIQUE-SIGN-IN COUNTER ────────────────────────────────────────
 // Records that *some* Google account signed in — never which one. The Google
 // account id is hashed client-side before it ever leaves the browser, so we
@@ -528,79 +532,257 @@ async function pingUniqueUser() {
   } catch (e) { console.warn('unique-user ping failed (non-fatal):', e); }
 }
 
+// ─── TOKEN LIFECYCLE ─────────────────────────────────────────────────────────
+// Google's browser-only flow hands out 1-hour access tokens and no refresh
+// token, so we manage the hour ourselves: remember when it ends, renew it
+// quietly before then (and again lazily whenever it's needed, because timers
+// stop while a laptop sleeps), and fall back to a one-click gate if Google
+// won't renew without the user.
+const loadHint = () => { try { return JSON.parse(lsGet(LS_HINT)); } catch { return null; } };
+function saveHint(u) {
+  loginHint = { sub: u.sub, email: u.email, name: u.name, given_name: u.given_name, picture: u.picture };
+  lsSet(LS_HINT, JSON.stringify(loginHint));
+}
+
+let loginHint     = loadHint();   // who signed in last time (no secrets)
+let gTokenExpiry  = 0;
+let refreshTimer  = null;
+let needsReauth   = false;        // true while only an interactive click can renew
+let needConsent   = false;        // user un-ticked the Drive permission
+let authWaiters   = [];
+let authTimeout   = null;
+let lastAuthError = null;
+let lastSilentFailAt = 0;
+
+const tokenFresh = (margin = 30000) => !!gAccessToken && Date.now() < gTokenExpiry - margin;
+const hasDriveScope = resp => google.accounts.oauth2.hasGrantedAllScopes(resp, DRIVE_APPDATA);
+
+function applyToken(resp) {
+  gAccessToken = resp.access_token;
+  gTokenExpiry = Date.now() + (Number(resp.expires_in) || 3600) * 1000;
+  needsReauth  = false;
+  try { sessionStorage.setItem(SS_TOKEN, JSON.stringify({ token: gAccessToken, exp: gTokenExpiry })); } catch {}
+  scheduleTokenRefresh();
+}
+
+// Reuse this tab's token across reloads so a refresh doesn't mean a new login.
+function restoreToken() {
+  try {
+    const t = JSON.parse(sessionStorage.getItem(SS_TOKEN));
+    if (t?.token && t.exp - Date.now() > TOKEN_SKEW_MS) {
+      gAccessToken = t.token;
+      gTokenExpiry = t.exp;
+      scheduleTokenRefresh();
+      return true;
+    }
+  } catch {}
+  return false;
+}
+
+function scheduleTokenRefresh() {
+  clearTimeout(refreshTimer);
+  refreshTimer = setTimeout(() => ensureToken(), Math.max(5000, gTokenExpiry - TOKEN_SKEW_MS - Date.now()));
+}
+
+function settleAuth(resp, errType) {
+  clearTimeout(authTimeout);
+  lastAuthError = errType || null;
+  authWaiters.splice(0).forEach(fn => fn(resp));
+}
+
+// One Google request at a time; concurrent callers share the result.
+function requestToken(prompt, hint) {
+  return new Promise(resolve => {
+    authWaiters.push(resolve);
+    if (authWaiters.length > 1) return;
+    authTimeout = setTimeout(() => settleAuth(null, 'timeout'), prompt === '' ? 20000 : 300000);
+    try {
+      const cfg = { prompt };
+      if (hint) cfg.login_hint = hint;
+      tokenClient.requestAccessToken(cfg);
+    } catch (e) { settleAuth(null, 'exception'); }
+  });
+}
+
+// A valid token, renewed silently when it is close to expiring; null if only
+// an interactive sign-in can get one.
+async function ensureToken() {
+  if (tokenFresh(TOKEN_SKEW_MS)) return gAccessToken;
+  const fallback = () => (tokenFresh() ? gAccessToken : null);
+  if (needsReauth || !tokenClient) return fallback();
+  if (Date.now() - lastSilentFailAt < 60000) return fallback();   // don't spam popups
+  const resp = await requestToken('', loginHint?.email);
+  if (resp) return gAccessToken;
+  lastSilentFailAt = Date.now();
+  return fallback();
+}
+
+function gateErrorMessage(type) {
+  if (type === 'popup_failed_to_open') return 'Your browser blocked the sign-in window — allow pop-ups for this site and try again.';
+  if (type === 'popup_closed' || type === 'access_denied') return 'Sign-in was cancelled — try again.';
+  return 'Couldn’t reach Google — check your connection and try again.';
+}
+
 // ─── GOOGLE IDENTITY SERVICES ────────────────────────────────────────────────
 function initGSI() {
+  q('#gate-login-btn').addEventListener('click', () => onGateContinue(false));
+  q('#gate-switch-btn')?.addEventListener('click', () => onGateContinue(true));
+  renderGate();
+
   if (!GOOGLE_CLIENT_ID) {
     setGateStatus('Google sign-in isn’t configured for this deployment.');
     q('#gate-login-btn').disabled = true;
     return;
   }
 
-  // Wait for GSI library to load
+  // Wait for GSI library to load (an ad-blocker can stop it entirely)
+  const started = Date.now();
   const waitGSI = setInterval(() => {
-    if (!window.google?.accounts?.oauth2) return;
+    if (!window.google?.accounts?.oauth2) {
+      if (Date.now() - started > 15000) {
+        clearInterval(waitGSI);
+        setGateStatus('Couldn’t load Google sign-in — check your connection or content blocker, then reload.');
+      }
+      return;
+    }
     clearInterval(waitGSI);
 
     tokenClient = google.accounts.oauth2.initTokenClient({
       client_id: GOOGLE_CLIENT_ID,
       scope: DRIVE_SCOPE,
-      callback: handleTokenResponse
+      callback: resp => {
+        if (resp.error) return settleAuth(null, resp.error);
+        applyToken(resp);
+        settleAuth(resp);
+      },
+      error_callback: err => settleAuth(null, err?.type || 'error')
     });
     setGateStatus('');
+    trySilentSignIn();
   }, 200);
-
-  q('#gate-login-btn').addEventListener('click', () => {
-    if (!tokenClient) return;
-    setGateStatus('Opening Google sign-in…');
-    tokenClient.requestAccessToken({ prompt: 'select_account' });
-  });
 }
 
-async function handleTokenResponse(resp) {
-  if (resp.error) {
-    console.error('GSI error:', resp.error);
-    setGateStatus('Sign-in was cancelled — try again.');
-    return;
-  }
-  setGateStatus('');
-  gAccessToken = resp.access_token;
-  console.log('GSI token received, scopes:', resp.scope);
+// On load: pick up where the user left off without a click if Google allows.
+async function trySilentSignIn() {
+  if (restoreToken()) { await completeSignIn(); return; }
+  if (!loginHint) return;
+  const resp = await requestToken('', loginHint.email);
+  if (resp && hasDriveScope(resp)) await completeSignIn();
+  else setGateStatus('');   // popup blocked or session gone — one click continues
+}
 
-  // Check if Drive scope was actually granted
-  const hasDriveScope = resp.scope?.includes('drive.appdata') || resp.scope?.includes('drive');
-  if (!hasDriveScope) {
-    console.warn('Drive scope missing — requesting consent again');
-    // Force full consent to get the Drive scope
-    tokenClient.requestAccessToken({ prompt: 'consent' });
-    return;
-  }
+async function onGateContinue(switchAccount) {
+  if (!tokenClient) { setGateStatus('Loading Google sign-in…'); return; }
+  const btn = q('#gate-login-btn');
+  btn.disabled = true;
+  try {
+    // Retrying after a failed Drive load: the token is still good, skip Google
+    if (!switchAccount && !needsReauth && tokenFresh()) { await completeSignIn(); return; }
 
-  // Fetch user profile
+    setGateStatus('Opening Google sign-in…');
+    const prompt = needConsent ? 'consent' : (switchAccount || !loginHint ? 'select_account' : '');
+    const resp = await requestToken(prompt, switchAccount ? undefined : loginHint?.email);
+    if (!resp) { setGateStatus(gateErrorMessage(lastAuthError)); return; }
+
+    if (!hasDriveScope(resp)) {
+      needConsent = true;
+      setGateStatus('Taskboards needs permission to use its private Drive folder — tick the Drive box and try again.');
+      return;
+    }
+    needConsent = false;
+
+    if (driveReady && !switchAccount) {   // mid-session reconnect: nothing to reload
+      hideAuthGate();
+      setGateStatus('');
+      if (isDirty()) driveSaveData();
+      return;
+    }
+    await completeSignIn();
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function completeSignIn() {
+  setGateStatus('Loading your boards…');
+  driveReady = false;
+  await loadUser();
+  await bootData();
+}
+
+async function loadUser() {
+  gUser = null;
   try {
     const r = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', { headers: { Authorization: `Bearer ${gAccessToken}` } });
-    gUser = await r.json();
-    console.log('Logged in as:', gUser.email);
+    if (r.ok) gUser = await r.json();
   } catch (e) { console.warn('userinfo failed', e); }
+  if (!gUser && loginHint) gUser = loginHint;   // keep going if only userinfo is down
 
-  pingUniqueUser(); // fire-and-forget anonymous sign-in counter
-  showUserPill();
-
-  // Always try to load from Drive — Drive is the source of truth when logged in
-  const driveData = await driveLoadData();
-  if (driveData?.boards?.length) {
-    console.log('Restoring', driveData.boards.length, 'boards from Drive');
-    boards = driveData.boards;
-    currentBoardId = driveData.currentBoardId || boards[0].id;
-    if (!boards.find(b => b.id === currentBoardId)) currentBoardId = boards[0].id;
-    saveToLocal();
-  } else {
-    console.log('No Drive data found — saving current local boards to Drive');
-    await driveSaveData();
+  if (gUser?.sub) {
+    // A different account must never inherit (and upload) the previous user's boards
+    const prev = lsGet(LS_SUB);
+    if (prev && prev !== gUser.sub) resetLocalData();
+    lsSet(LS_SUB, gUser.sub);
+    saveHint(gUser);
   }
+  showUserPill();
+}
 
-  renderTabs();
-  renderBoard();
-  hideAuthGate();
+function resetLocalData() {
+  [LS_BOARDS, LS_CURRENT, LS_DRIVE_FID, LS_DIRTY, LS_BASE].forEach(k => lsDel(k));
+  driveFileId = null;
+  driveModified = null;
+  changeSeq = savedSeq = 0;
+  boards = [defaultBoard()];
+  currentBoardId = boards[0].id;
+}
+
+// Decide between this device's copy and Drive's, then open the app.
+async function bootData() {
+  setSyncStatus('syncing', 'Loading from Drive…');
+  showSkeleton(true);
+  try {
+    const remote      = await driveLoadData();
+    const hasRemote   = !!remote?.data.boards.length;
+    const localDirty  = lsGet(LS_DIRTY) === '1';
+    const base        = lsGet(LS_BASE);
+    let upload = false;
+
+    if (hasRemote && !localDirty) {
+      applyRemote(remote);
+      showToast(`Loaded ${remote.data.boards.length} boards`, 'success');
+    } else if (hasRemote) {
+      // Unsynced edits from a previous session: keep them unless Drive changed too
+      const moved = !base || Date.parse(remote.modifiedTime) > Date.parse(base);
+      if (moved && !keepLocalOnConflict()) applyRemote(remote);
+      else { setDriveModified(remote.modifiedTime); upload = true; }
+    } else {
+      setDriveModified(remote?.modifiedTime);
+      upload = true;
+      showToast('Ready to save to Drive', 'info');
+    }
+
+    driveReady = true;
+    showSkeleton(false);
+    renderTabs();
+    renderOwnerFilterChips();
+    renderBoard();
+    hideAuthGate();
+    setGateStatus('');
+    pingUniqueUser(); // fire-and-forget anonymous sign-in counter
+
+    if (upload) { markDirty(); await driveSaveData(); }
+    else setSyncStatus('synced', 'Loaded from Drive ✓');
+  } catch (err) {
+    console.error('bootData error:', err.message);
+    showSkeleton(false);
+    setSyncStatus('error', 'Load failed');
+    if (err instanceof AuthError) { requestReconnect(); return; }
+    // Never save over Drive after a failed load — just offer a retry
+    renderGate();
+    showAuthGate();
+    setGateStatus('Couldn’t load your boards from Drive — check your connection and try again.');
+  }
 }
 
 function showUserPill() {
@@ -622,20 +804,31 @@ document.addEventListener('click', e => {
   if (!e.target.closest('#user-pill')) closeUserMenu();
 });
 
-function handleLogout() {
+async function handleLogout() {
+  // Don't drop edits that haven't reached Drive without saying so
+  clearTimeout(saveTimer);
+  if (driveReady && isDirty()) {
+    await driveSaveData();
+    if (isDirty() && !confirm('Some changes haven’t reached Drive yet and will be lost if you sign out. Sign out anyway?')) return;
+  }
+
   if (gAccessToken && window.google?.accounts?.oauth2) {
     google.accounts.oauth2.revoke(gAccessToken, () => {});
   }
+  clearTimeout(refreshTimer);
+  clearTimeout(retryTimer);
+  try { sessionStorage.removeItem(SS_TOKEN); } catch {}
   gAccessToken = null;
+  gTokenExpiry = 0;
   gUser = null;
-  driveFileId = null;
-  lsDel(LS_DRIVE_FID);
+  loginHint = null;
+  driveReady = false;
+  needsReauth = false;
+  lsDel(LS_HINT);
+  lsDel(LS_SUB);
 
   // Clear boards from local storage so next user starts clean
-  lsDel(LS_BOARDS);
-  lsDel(LS_CURRENT);
-  boards = [defaultBoard()];
-  currentBoardId = boards[0].id;
+  resetLocalData();
   archiveExpanded = false;
   doneExpanded = false;
   q('#archive-bar').classList.remove('expanded');
@@ -645,6 +838,7 @@ function handleLogout() {
   closeUserMenu();
   q('#user-pill').classList.add('hidden');
   setSyncStatus('', 'Offline');
+  renderGate();
   showAuthGate();
 
   // Back to the landing page — signing out means leaving the app, not just
@@ -654,10 +848,21 @@ function handleLogout() {
 
 q('#logout-btn')?.addEventListener('click', handleLogout);
 
+// Keep the Drive copy fresh and complete as the tab/device comes and goes
+document.addEventListener('visibilitychange', async () => {
+  if (!driveReady) return;
+  if (document.visibilityState === 'hidden') { flushSave(); return; }
+  if (await ensureToken()) driveRefreshIfNewer();
+  else requestReconnect();
+});
+window.addEventListener('pagehide', flushSave);
+window.addEventListener('online', () => { if (driveReady && isDirty()) driveSaveData(); });
+
 // ─── CHANGE HANDLER ───────────────────────────────────────────────────────────
 function onDataChanged() {
   saveToLocal();
-  if (gAccessToken) scheduleDriveSave();
+  markDirty();
+  if (driveReady) scheduleDriveSave();
 }
 
 // ─── BOARD CRUD ───────────────────────────────────────────────────────────────
