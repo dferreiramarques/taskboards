@@ -35,6 +35,11 @@ window.TASKBOARDS_CONFIG = {
   // Leave blank to switch the viewer off.
   DRIVE_API_KEY: 'AIzaSyBd5VnGL_eTpuKLwrdclLCmakzVXqsu2Og',
 
+  // ─── Waitlist / demo requests on the landing page (optional) ──────────────
+  // A form endpoint that accepts a JSON POST (Formspree, for example). Leave blank to
+  // hide the waitlist form. Submissions are tagged "Taskboards: waitlist / demo request".
+  WAITLIST_URL: 'https://formspree.io/f/xoejrvnj',
+
   // ─── Anonymous unique-sign-in counter (optional) ──────────────────────────
   // Not a secret — this key can only insert/update a one-way hash of the
   // signed-in user's Google id (see users_seen table RLS policies). It can

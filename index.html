@@ -450,6 +450,91 @@
         .footer-inner a:hover { color: var(--brand); }
 
         .footer-links { display: flex; gap: 20px; flex-wrap: wrap; }
+
+        /* ===== Plans & waitlist ===== */
+
+        [hidden] { display: none !important; }
+
+        .tiers { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 20px; align-items: stretch; }
+
+        .tier {
+            border: 1px solid var(--stroke1);
+            border-radius: 14px;
+            padding: 28px;
+            background: var(--bg2);
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .tier.hl { border-color: var(--brand); box-shadow: var(--shadow); }
+
+        .tier .st {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: .72rem;
+            font-weight: 600;
+            letter-spacing: .1em;
+            text-transform: uppercase;
+            color: var(--fg4);
+        }
+        .tier.hl .st { color: var(--brand); }
+
+        .tier h3 { font-size: 1.35rem; font-weight: 700; letter-spacing: -0.01em; }
+        .tier .tier-sub { color: var(--fg3); font-size: .92rem; margin-bottom: 6px; }
+
+        .tier ul { list-style: none; display: flex; flex-direction: column; gap: 10px; margin: 6px 0 0; padding: 0; }
+        .tier li { position: relative; padding-left: 24px; font-size: .92rem; color: var(--fg2); }
+        .tier li::before {
+            content: "";
+            position: absolute;
+            left: 3px;
+            top: .5em;
+            width: 9px;
+            height: 5px;
+            border-left: 2px solid var(--brand);
+            border-bottom: 2px solid var(--brand);
+            transform: rotate(-45deg);
+        }
+        .tier li.inc { color: var(--fg4); }
+        .tier li.inc::before { display: none; }
+        .tier li.inc { padding-left: 0; }
+
+        .tier .tier-fine { margin-top: auto; padding-top: 14px; font-size: .82rem; color: var(--fg4); }
+        .tier .btn { margin-top: 14px; align-self: flex-start; }
+
+        .band { background: var(--bg2); border-top: 1px solid var(--stroke2); border-bottom: 1px solid var(--stroke2); }
+
+        form.wl { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; max-width: 760px; }
+        form.wl .full { grid-column: 1 / -1; }
+        @media (max-width: 640px) { form.wl { grid-template-columns: 1fr; } }
+
+        form.wl label.f { display: flex; flex-direction: column; gap: 6px; font-size: .8rem; font-weight: 600; color: var(--fg2); }
+        form.wl input[type=email],
+        form.wl input[type=text],
+        form.wl select,
+        form.wl textarea {
+            width: 100%;
+            border: 1px solid var(--stroke1);
+            border-radius: 10px;
+            background: var(--bg1);
+            color: var(--fg1);
+            padding: 11px 14px;
+            font: inherit;
+            font-weight: 400;
+            font-size: .95rem;
+        }
+        form.wl textarea { min-height: 84px; resize: vertical; }
+        form.wl input:focus, form.wl select:focus, form.wl textarea:focus {
+            outline: none;
+            border-color: var(--brand);
+            box-shadow: 0 0 0 3px var(--brand-bg);
+        }
+        form.wl .chk { display: flex; gap: 10px; align-items: flex-start; font-size: .88rem; color: var(--fg2); font-weight: 400; }
+        form.wl .chk input { width: 18px; height: 18px; margin-top: 2px; accent-color: var(--brand); flex-shrink: 0; }
+        form.wl .hp { position: absolute; left: -9999px; width: 1px; height: 1px; opacity: 0; }
+        .wl-fine { max-width: 760px; margin-top: 16px; font-size: .8rem; color: var(--fg4); }
+        .wl-msg { max-width: 760px; margin-top: 12px; font-size: .92rem; min-height: 1.4em; }
+        .wl-msg.ok { color: #1a7f37; }
+        .wl-msg.err { color: #c62828; }
     </style>
 </head>
 <body>
@@ -465,6 +550,7 @@
                     <a href="#features">Features</a>
                     <a href="#privacy">Privacy</a>
                     <a href="#sync">Sync</a>
+                    <a href="#plans">Plans</a>
                     <a href="#start">Get started</a>
                     <a href="https://github.com/dferreiramarques/taskboards" target="_blank" rel="noopener">GitHub</a>
                 </div>
@@ -652,6 +738,108 @@
 
         <div class="wrap"><div class="divider"></div></div>
 
+        <section id="plans">
+            <div class="wrap">
+                <div class="section-head">
+                    <div class="eyebrow mono">Plans</div>
+                    <h2>Free for you. Built to grow with your team.</h2>
+                    <p>Taskboards is free for personal use. Team plans are in preparation — and for companies that need to keep everything on their own infrastructure, we install and set it up with you.</p>
+                </div>
+                <div class="tiers">
+                    <article class="tier hl">
+                        <span class="st">Available now</span>
+                        <h3>Free</h3>
+                        <p class="tier-sub">For personal use and small projects.</p>
+                        <ul>
+                            <li>Unlimited private boards</li>
+                            <li>Sign in with Google — your boards live in your own Drive</li>
+                            <li>Share a single board as a read-only link, protected by a passphrase</li>
+                            <li>Works offline; export and import as a JSON file</li>
+                        </ul>
+                        <a class="btn btn-primary" href="app.html">Continue with Google</a>
+                        <p class="tier-fine">Free forever.</p>
+                    </article>
+
+                    <article class="tier">
+                        <span class="st">Coming soon</span>
+                        <h3>Teams</h3>
+                        <p class="tier-sub">For small teams working on the same boards.</p>
+                        <ul>
+                            <li class="inc">Everything in Free</li>
+                            <li>Boards that several people can edit together</li>
+                            <li>Roles: editors and read-only viewers</li>
+                            <li>Seats for teams of 5, 10 or more</li>
+                            <li>Guided setup and onboarding (one-off setup fee)</li>
+                        </ul>
+                        <p class="tier-fine">Price to be announced. Waitlist members hear first.</p>
+                    </article>
+
+                    <article class="tier">
+                        <span class="st">Coming soon</span>
+                        <h3>On your infrastructure</h3>
+                        <p class="tier-sub">For companies that want data and access under their own control.</p>
+                        <ul>
+                            <li class="inc">Everything in Teams</li>
+                            <li>Installed in your own Google Workspace or Microsoft 365 / OneDrive</li>
+                            <li>Boards stored in your tenant; sign-in limited to your company</li>
+                            <li>Installation, team training and follow-up with us</li>
+                            <li>One-off setup fee plus a per-seat plan</li>
+                        </ul>
+                        <p class="tier-fine">Price on request.</p>
+                    </article>
+                </div>
+            </div>
+        </section>
+
+        <section class="band" id="waitlist">
+            <div class="wrap">
+                <div class="section-head">
+                    <div class="eyebrow mono">Waitlist &amp; demo</div>
+                    <h2>Want Teams, or a demo on your own infrastructure?</h2>
+                    <p>Leave your details and we'll get in touch — about early access, or to schedule a demo of how Taskboards would be installed in your Google Workspace or Microsoft 365.</p>
+                </div>
+                <form class="wl" id="wl" novalidate>
+                    <label class="f full">Email *
+                        <input type="email" name="email" required autocomplete="email" placeholder="you@company.com">
+                    </label>
+                    <label class="f">Name
+                        <input type="text" name="name" autocomplete="name" maxlength="80">
+                    </label>
+                    <label class="f">Company or team
+                        <input type="text" name="company" autocomplete="organization" maxlength="80">
+                    </label>
+                    <label class="f">Team size
+                        <select name="team_size">
+                            <option value="">Select…</option>
+                            <option>Just me</option>
+                            <option>2–5 people</option>
+                            <option>6–10 people</option>
+                            <option>More than 10</option>
+                        </select>
+                    </label>
+                    <label class="f">Where would it run?
+                        <select name="platform">
+                            <option value="">Select…</option>
+                            <option>Google Workspace</option>
+                            <option>Microsoft 365 / OneDrive</option>
+                            <option>Something else / not sure yet</option>
+                        </select>
+                    </label>
+                    <label class="f full">What would you use it for? (optional)
+                        <textarea name="usage" maxlength="400"></textarea>
+                    </label>
+                    <input class="hp" type="text" name="_gotcha" tabindex="-1" autocomplete="off" aria-hidden="true"><!-- honeypot: bots fill it, the form service drops those -->
+                    <label class="chk full"><input type="checkbox" name="demo"><span>I'd like a demo call</span></label>
+                    <label class="chk full"><input type="checkbox" name="consent" required><span>I agree to be contacted about Taskboards plans and demos.</span></label>
+                    <div class="full"><button class="btn btn-primary" type="submit">Join the waitlist</button></div>
+                </form>
+                <p class="wl-fine">We use your details only to contact you about Taskboards plans and the demo. We don't share them with third parties; the submission is handled by Formspree, which stores it on our behalf. You can ask us to delete it at any time by replying to one of our emails.</p>
+                <div class="wl-msg" id="wlmsg" role="status" aria-live="polite"></div>
+            </div>
+        </section>
+
+        <div class="wrap"><div class="divider"></div></div>
+
         <section id="start">
             <div class="wrap">
                 <div class="section-head">
@@ -694,6 +882,7 @@
         </div>
     </footer>
 
+    <script src="./config.js"></script>
     <script>
         (function () {
             var moon = 'M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79Z';
@@ -720,6 +909,51 @@
             });
 
             paint();
+        })();
+    </script>
+    <script>
+        // Waitlist / demo requests go to a form service (Formspree). Set WAITLIST_URL in config.js;
+        // while it is empty the section stays hidden and nothing is collected.
+        (function () {
+            var url = (window.TASKBOARDS_CONFIG || {}).WAITLIST_URL || '';
+            var band = document.getElementById('waitlist');
+            var form = document.getElementById('wl');
+            var msg = document.getElementById('wlmsg');
+            if (!url) { band.hidden = true; msg.hidden = true; return; }
+
+            form.addEventListener('submit', function (e) {
+                e.preventDefault();
+                msg.className = 'wl-msg';
+                msg.textContent = '';
+                if (!form.reportValidity()) return;
+                var btn = form.querySelector('button[type=submit]');
+                btn.disabled = true;
+                fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+                    body: JSON.stringify({
+                        email: form.email.value,
+                        name: form.name.value,
+                        company: form.company.value,
+                        team_size: form.team_size.value,
+                        platform: form.platform.value,
+                        usage: form.usage.value,
+                        demo: form.demo.checked,
+                        consent: form.consent.checked,
+                        _gotcha: form._gotcha.value,
+                        _subject: 'Taskboards: waitlist / demo request',
+                        page: location.pathname
+                    })
+                }).then(function (r) {
+                    if (!r.ok) throw new Error(r.status);
+                    form.reset();
+                    msg.className = 'wl-msg ok';
+                    msg.textContent = 'Thank you! We\'ll be in touch.';
+                }).catch(function () {
+                    msg.className = 'wl-msg err';
+                    msg.textContent = 'Could not send. Please try again later.';
+                }).then(function () { btn.disabled = false; });
+            });
         })();
     </script>
 </body>
