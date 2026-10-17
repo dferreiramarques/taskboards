@@ -1147,7 +1147,6 @@ kbd {
   display: flex; align-items: center; justify-content: center;
   background: var(--f-bg1);
   padding: 24px;
-  animation: fade-in var(--f-fast) var(--f-ease);
 }
 .auth-gate.hidden { display: none; }
 

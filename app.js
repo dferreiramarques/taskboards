@@ -2103,12 +2103,16 @@ if ('serviceWorker' in navigator) {
     reg.update().catch(() => {});
   }).catch(() => {});
 
-  // If a new SW takes over, reload once to get fresh assets
-  let swRefreshing = false;
-  navigator.serviceWorker.addEventListener('controllerchange', () => {
-    if (swRefreshing) return;
-    swRefreshing = true;
-    window.location.reload();
+  // A new worker takes over when a release is deployed. Reloading the moment that happens made the
+  // page flash — and the very first visit reloaded itself too, because the first install also
+  // "changes" the controller. So: nothing to do on a first install (nothing is stale yet); for an
+  // update, apply it quietly the next time the tab is hidden. Unsaved edits are already persisted
+  // locally and reconciled on the next start, so the reload is safe.
+  const hadController = !!navigator.serviceWorker.controller;
+  let updateReady = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => { if (hadController) updateReady = true; });
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden' && updateReady) window.location.reload();
   });
 }
 
