@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#0d1117" />
+  <meta name="robots" content="noindex, nofollow" />
+  <!-- The page reads untrusted files, so it may only run its own scripts and talk to Google Drive -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src https://www.googleapis.com; img-src 'self' data:; base-uri 'none'; form-action 'none'" />
+  <title>Shared board · Taskboards</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="./style.css" />
+  <link rel="stylesheet" href="./view.css" />
+  <script src="./config.js"></script>
+  <script src="./share-core.js"></script>
+</head>
+<body class="view locked">
+
+  <!-- ── PASSPHRASE GATE ── -->
+  <div id="view-gate" class="auth-gate">
+    <form class="auth-gate__card" id="view-form" autocomplete="off">
+      <span class="auth-gate__mark">◈</span>
+      <h1 class="auth-gate__title">Shared board</h1>
+      <p class="auth-gate__sub">This board is shared read-only. Enter the passphrase you were given to open it.</p>
+      <input class="modal__input view__pass" id="view-pass" type="text" placeholder="XXXX-XXXX-XXXX-XXXX"
+             autocomplete="off" autocapitalize="characters" spellcheck="false" aria-label="Passphrase" />
+      <button class="login-btn login-btn--gate" id="view-open" type="submit">
+        <span class="login-btn__label">View board</span>
+      </button>
+      <p class="auth-gate__status" id="view-status" role="status"></p>
+    </form>
+  </div>
+
+  <!-- ── TOP BAR ── -->
+  <div class="topbar">
+    <div class="topbar__brand">
+      <span class="topbar__logo">◈</span>
+      <span class="topbar__name">TASKBOARDS</span>
+    </div>
+    <div class="topbar__actions">
+      <button id="theme-btn" class="topbar__btn topbar__btn--theme" title="Toggle theme"><span id="theme-icon">☽</span></button>
+      <a class="view__cta" href="./index.html">Open Taskboards</a>
+    </div>
+  </div>
+
+  <div class="view__head">
+    <h1 class="view__name" id="view-name"></h1>
+    <span class="view__meta" id="view-meta">Read-only</span>
+  </div>
+
+  <!-- ── BOARD (read-only) ── -->
+  <main class="board" id="board">
+    <section class="column column--todo" data-zone="todo">
+      <div class="column__header">
+        <span class="column__dot"></span>
+        <span class="column__title">TO DO</span>
+        <span class="column__count" id="todo-count">0</span>
+      </div>
+      <div class="column__cards" id="todo-cards"></div>
+    </section>
+    <div class="board__divider"></div>
+    <section class="column column--inprogress" data-zone="inprogress">
+      <div class="column__header">
+        <span class="column__dot"></span>
+        <span class="column__title">IN PROGRESS</span>
+        <span class="column__count" id="inprogress-count">0</span>
+      </div>
+      <div class="column__cards" id="inprogress-cards"></div>
+    </section>
+  </main>
+
+  <div class="view__shelves">
+    <details class="view__shelf view__shelf--archive">
+      <summary>◈ ARCHIVE <span class="shelf__count" id="archive-count">0</span></summary>
+      <div class="view__shelf-cards" id="archive-cards"></div>
+    </details>
+    <details class="view__shelf view__shelf--done">
+      <summary>✓ DONE <span class="shelf__count" id="done-count">0</span></summary>
+      <div class="view__shelf-cards" id="done-cards"></div>
+    </details>
+  </div>
+
+  <script src="./view.js"></script>
+</body>
+</html>

@@ -29,7 +29,8 @@ const GOOGLE_AUTH_URL   = env.GOOGLE_AUTH_URL   || 'https://accounts.google.com/
 const GOOGLE_TOKEN_URL  = env.GOOGLE_TOKEN_URL  || 'https://oauth2.googleapis.com/token';
 const GOOGLE_REVOKE_URL = env.GOOGLE_REVOKE_URL || 'https://oauth2.googleapis.com/revoke';
 const DRIVE_APPDATA     = 'https://www.googleapis.com/auth/drive.appdata';
-const SCOPE             = `openid email profile ${DRIVE_APPDATA}`;
+const DRIVE_FILE        = 'https://www.googleapis.com/auth/drive.file';   // create the shared copy of a board
+const SCOPE             = `openid email profile ${DRIVE_APPDATA} ${DRIVE_FILE}`;
 
 const enabled = !!(CLIENT_ID && CLIENT_SECRET && COOKIE_SECRET && BASE_URL && APP_ORIGINS.length);
 const SECURE  = BASE_URL.startsWith('https://');
@@ -150,6 +151,7 @@ router.get('/login', requireEnabled, (req, res) => {
     response_type: 'code',
     scope: SCOPE,
     access_type: 'offline',            // ask for a refresh token…
+    include_granted_scopes: 'true',
     prompt: req.query.switch ? 'select_account consent' : 'consent',   // …and make sure Google issues one
     state: nonce
   });

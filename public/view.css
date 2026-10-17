@@ -1,0 +1,57 @@
+/* Read-only shared-board page (view.html). Builds on style.css. */
+
+/* the gate hides its form with [hidden]; make sure component styles never override that */
+.view [hidden] { display: none !important; }
+
+/* nothing of the board is shown until it has been decrypted */
+body.view.locked .topbar,
+body.view.locked .view__head,
+body.view.locked .board,
+body.view.locked .view__shelves { display: none; }
+
+.view__head {
+  display: flex; align-items: baseline; gap: 12px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--f-stroke2);
+  flex-shrink: 0;
+}
+.view__name {
+  font-size: 1.05rem; font-weight: 700; color: var(--f-fg1);
+  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.view__meta { font-size: .75rem; color: var(--f-fg4); margin-left: auto; white-space: nowrap; }
+
+.view__cta {
+  font-size: .75rem; font-weight: 600; text-decoration: none;
+  color: var(--f-brand); padding: 5px 10px;
+  border: 1px solid var(--f-stroke1); border-radius: var(--f-r4);
+}
+.view__cta:hover { background: var(--f-bg2); }
+
+.view__pass {
+  text-align: center; letter-spacing: .12em; text-transform: uppercase;
+  font-family: "JetBrains Mono", ui-monospace, monospace; margin-top: 4px;
+}
+
+/* cards here are for reading, not dragging */
+.view .card { cursor: default; touch-action: auto; user-select: text; }
+.view .card:hover { transform: none; box-shadow: var(--f-shadow2); }
+
+.view__shelves {
+  flex-shrink: 0; max-height: 40dvh; overflow-y: auto;
+  background: var(--f-bg1); border-top: 1px solid var(--f-stroke2);
+}
+.view__shelf + .view__shelf { border-top: 1px solid var(--f-stroke2); }
+.view__shelf summary {
+  cursor: pointer; padding: 10px 16px;
+  font-size: .75rem; font-weight: 600; letter-spacing: .04em; color: var(--f-fg3);
+}
+.view__shelf--archive summary { color: var(--f-archive); }
+.view__shelf--done summary    { color: var(--f-done); }
+.view__shelf-cards { display: flex; flex-direction: column; gap: 6px; padding: 0 16px 12px; }
+
+@media (max-width: 520px) {
+  .view__head { flex-wrap: wrap; gap: 2px 12px; }
+  .view__meta { margin-left: 0; }
+  .view__cta { display: none; }
+}

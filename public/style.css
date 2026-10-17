@@ -347,6 +347,16 @@ body {
   padding: 0;
 }
 
+.board-tab__share {
+  background: none; border: none; padding: 0;
+  font-size: .8rem; line-height: 1;
+  cursor: pointer; flex-shrink: 0;
+  opacity: .75;
+  filter: saturate(.8);
+  transition: opacity var(--f-fast), transform var(--f-fast);
+}
+.board-tab__share:hover { opacity: 1; transform: scale(1.15); }
+
 .board-tab__delete {
   width: 16px;
   height: 16px;
@@ -929,6 +939,7 @@ body.done-expanded .fab { bottom: calc(300px + 24px); }
   overflow: hidden;
 }
 .modal--help { max-width: 480px; max-height: 85dvh; display: flex; flex-direction: column; }
+.modal--share { max-width: 440px; }
 
 @keyframes slide-up {
   from { opacity: 0; transform: translateY(16px); }
@@ -1015,6 +1026,26 @@ body.done-expanded .fab { bottom: calc(300px + 24px); }
 }
 .modal__submit:hover { background: var(--f-brand-h); box-shadow: var(--f-shadow8); }
 .modal__submit:active { background: var(--f-brand-a); transform: scale(.99); }
+.modal__submit--danger { background: var(--f-danger); }
+.modal__submit--danger:hover { background: var(--f-danger); filter: brightness(1.1); }
+.modal__submit--danger:active { background: var(--f-danger); filter: brightness(.92); }
+
+/* ── Share dialog ── */
+.share__text { font-size: .8125rem; line-height: 1.55; color: var(--f-fg2); }
+.share__text--dim { color: var(--f-fg3); font-size: .75rem; }
+.share__note  { font-size: .75rem; color: var(--f-warning); line-height: 1.5; }
+.share__error { font-size: .75rem; color: var(--f-danger); line-height: 1.5; }
+.share__row { display: flex; gap: 6px; }
+.share__pass { font-family: "JetBrains Mono", ui-monospace, monospace; letter-spacing: .06em; }
+.share__copy {
+  flex-shrink: 0; background: var(--f-bg2); color: var(--f-fg2);
+  border: 1px solid var(--f-stroke1); border-radius: var(--f-r4);
+  font: inherit; font-size: .6875rem; font-weight: 600; letter-spacing: .03em;
+  padding: 0 12px; cursor: pointer;
+  transition: background var(--f-fast), color var(--f-fast);
+}
+.share__copy:hover { background: var(--f-bg3); color: var(--f-fg1); }
+.share__actions { display: flex; flex-direction: column; gap: 8px; margin-top: 2px; }
 
 /* ══════════════════════════════════════════════════════
    HELP MODAL
@@ -1194,6 +1225,7 @@ kbd {
   font-family: inherit;
 }
 .user-pill__menu-item:hover { background: var(--f-bg2); color: var(--f-danger); }
+.user-pill__menu-item--neutral:hover { color: var(--f-fg1); }
 
 .sync-status { display: flex; align-items: center; gap: 6px; padding: 6px 14px 4px; font-size: .6875rem; color: var(--f-fg4); }
 .sync-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--f-fg4); flex-shrink: 0; }

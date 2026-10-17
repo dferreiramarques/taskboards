@@ -27,6 +27,14 @@ window.TASKBOARDS_CONFIG = {
   // Must share a "site" with this page, e.g. https://auth.monco.io for taskboards.monco.io.
   AUTH_API: location.hostname.endsWith('monco.io') ? 'https://auth.monco.io' : '',
 
+  // ─── Board sharing (optional) ─────────────────────────────────────────────
+  // Public API key used by view.html to download a shared board without signing in.
+  // Not a secret, but restrict it in Google Cloud: Credentials → API key →
+  //   Application restrictions: HTTP referrers (https://taskboards.monco.io/*)
+  //   API restrictions: Google Drive API
+  // Leave blank to switch the viewer off.
+  DRIVE_API_KEY: 'AIzaSyBd5VnGL_eTpuKLwrdclLCmakzVXqsu2Og',
+
   // ─── Anonymous unique-sign-in counter (optional) ──────────────────────────
   // Not a secret — this key can only insert/update a one-way hash of the
   // signed-in user's Google id (see users_seen table RLS policies). It can

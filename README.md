@@ -18,6 +18,8 @@
 | **Owner filter** | Quick-filter chips above the board — tap an owner to see only their cards. |
 | **Google sign-in required** | A full-screen gate blocks the board until you sign in with Google. There is no local/offline account-free mode. |
 | **Google Drive sync** | Every board saves to your personal Drive (private app folder) — nothing is stored on any Taskboards server. Works across devices. |
+| **Share one board** | Click the 🔒 before a board’s name to publish a read-only link. Only that board is shared, protected by a passphrase; 🚀 means it is public, and one click revokes it. |
+| **Backup** | Export / import all boards as a `.json` file from the user menu. |
 | **Stays signed in** | With the optional session server, a Google refresh token (encrypted, in an httpOnly cookie) renews your sign-in quietly — no hourly re-login. |
 | **Installable** | Install banner appears automatically on Chrome/Edge (desktop + Android) and with step-by-step instructions on iOS Safari. |
 | **Dark / light theme** | Toggle between themes. Preference saved locally. |
@@ -94,6 +96,25 @@ Here's how a small team might use Taskboards for a sprint:
 
 ---
 
+## Sharing a board (read-only)
+
+Each board has a lock in its tab: **🔒 private** (default) or **🚀 public**. Click it to open the share dialog.
+
+- **Share link** publishes just that board as one *encrypted* file in the owner’s Google Drive (visible to anyone with the link, but unreadable without the passphrase). A passphrase like `7KQM-X2PD-9WFH-ZT4C` is generated and shown in the dialog together with the link; **Copy share details** copies both.
+- Viewers open `view.html?b=…`, type the passphrase and see the latest version, read-only, refreshed every ~30 s. They don’t need a Google account. Decryption happens in their browser; the passphrase never leaves it.
+- Only the owner edits. Every change is re-published automatically within seconds.
+- **Revoke public access** deletes the shared copy, so the link stops working immediately and the board is private again. Deleting a shared board (or replacing everything via *Import*) revokes it too.
+
+**Set it up (one time)**
+
+1. **Google Cloud Console → Credentials → Create credentials → API key.** Restrict it: *Application restrictions* → HTTP referrers `https://taskboards.monco.io/*`; *API restrictions* → **Google Drive API**. Paste it in `config.js`: `DRIVE_API_KEY: AIza…` (it is public by design). Until it is set, the app says sharing isn’t enabled and nothing is published.
+2. **Google Auth Platform → Data access → Add or remove scopes:** add `.../auth/drive.file` (non-sensitive — no Google review). The app creates files only for boards the user chooses to share.
+3. Redeploy the session server (it now also requests `drive.file`). Existing users are asked for the extra permission the first time they share.
+
+> The passphrase is stored in the owner’s own private Drive copy so it can be shown again. Anyone who has both the link and the passphrase can read the board — revoke to cut them off.
+
+---
+
 ## Stay signed in: the session server (optional)
 
 Google’s browser-only sign-in only gives 1-hour tokens, so without this the app re-asks Google about once an hour (and some browsers block that pop-up). `auth.js` fixes it with Google’s *authorization code* flow: it keeps a **refresh token** in an encrypted, `httpOnly` cookie in the user’s own browser and swaps it for a fresh access token whenever the app needs one.
@@ -160,6 +181,8 @@ taskboards/
 │   ├── style.css       # Primer-based design system, light + dark themes
 │   ├── sw.js           # Service worker — cache versioning, offline support
 │   ├── manifest.json   # PWA manifest — icons, display mode, theme colour
+│   ├── share-core.js   # Passphrase + AES-GCM encryption for shared boards
+│   ├── view.html/.js/.css  # Read-only viewer for a shared board
 │   └── config.js       # Google Client ID (not secret, safe to commit)
 ├── auth.js             # Optional session server: refresh-token cookie, /auth/*
 ├── .env.example        # Session-server settings

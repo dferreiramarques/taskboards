@@ -46,6 +46,8 @@
     </div>
   </div>
 
+  <input type="file" id="import-file" accept="application/json,.json" hidden />
+
   <div id="particles" class="particles" aria-hidden="true"></div>
   <div id="confetti-layer" class="confetti-layer" aria-hidden="true"></div>
   <div id="toast-container" class="toast-container" aria-live="polite"></div>
@@ -73,6 +75,9 @@
           <span class="user-pill__name" id="user-name"></span>
           <div class="user-pill__menu" id="user-menu">
             <div class="user-pill__menu-email" id="user-email-menu"></div>
+            <div class="user-pill__menu-divider"></div>
+            <button class="user-pill__menu-item user-pill__menu-item--neutral" id="export-btn">Export backup (.json)</button>
+            <button class="user-pill__menu-item user-pill__menu-item--neutral" id="import-btn">Import backup…</button>
             <div class="user-pill__menu-divider"></div>
             <button class="user-pill__menu-item" id="logout-btn">Sign out</button>
             <div class="sync-status" id="sync-status">
@@ -278,6 +283,18 @@
     </div>
   </div>
 
+  <!-- ── SHARE MODAL ── -->
+  <div id="share-overlay" class="modal-overlay hidden">
+    <div class="modal modal--share" id="share-modal" role="dialog" aria-labelledby="share-title">
+      <div class="modal__header">
+        <span class="modal__title" id="share-title">SHARE BOARD</span>
+        <button class="modal__close" id="share-close" aria-label="Close">✕</button>
+      </div>
+      <div class="modal__body" id="share-body"></div>
+    </div>
+  </div>
+
+  <script src="./share-core.js"></script>
   <script src="./app.js"></script>
 
 </body>

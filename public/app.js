@@ -7,7 +7,8 @@ console.log('%c TaskBoards v' + APP_VERSION + ' loaded', 'background:#ffa300;col
 // ─── CONFIG & CONSTANTS ───────────────────────────────────────────────────────
 const GOOGLE_CLIENT_ID  = (window.TASKBOARDS_CONFIG || {}).GOOGLE_CLIENT_ID || '';
 const DRIVE_APPDATA     = 'https://www.googleapis.com/auth/drive.appdata';
-const DRIVE_SCOPE       = `${DRIVE_APPDATA} openid email profile`;
+const DRIVE_FILE        = 'https://www.googleapis.com/auth/drive.file';   // lets the app create the shared copy of a board
+const DRIVE_SCOPE       = `${DRIVE_APPDATA} ${DRIVE_FILE} openid email profile`;
 const DRIVE_FILENAME    = 'taskboards-data.json';
 const DRIVE_FOLDER      = 'appDataFolder';
 const DRIVE_API         = 'https://www.googleapis.com/drive/v3';
@@ -16,6 +17,9 @@ const DRIVE_UPLOAD_API  = 'https://www.googleapis.com/upload/drive/v3';
 // Optional session server (see auth.js). When set, the app keeps a long-lived
 // Google session through it instead of re-asking Google every hour.
 const AUTH_API          = ((window.TASKBOARDS_CONFIG || {}).AUTH_API || '').replace(/\/$/, '');
+
+// Public key the viewer page uses to download a shared board. Sharing stays off until it is set.
+const DRIVE_API_KEY     = (window.TASKBOARDS_CONFIG || {}).DRIVE_API_KEY || '';
 
 const SUPABASE_URL      = (window.TASKBOARDS_CONFIG || {}).SUPABASE_URL || '';
 const SUPABASE_ANON_KEY = (window.TASKBOARDS_CONFIG || {}).SUPABASE_ANON_KEY || '';
@@ -58,6 +62,7 @@ let selectedOwners  = new Set(); // for filtering cards by owner
 
 // Auth state
 let gAccessToken   = null;
+let gScopes        = '';       // scopes Google actually granted
 let gUser          = null;     // {name, email, picture}
 let driveFileId    = lsGet(LS_DRIVE_FID);
 let saveTimer      = null;
@@ -412,6 +417,7 @@ async function driveSaveData() {
     await driveWrite();
     retryDelay = 0;
     setSyncStatus('synced', 'Saved to Drive ✓');
+    publishShares();   // keep the public copies of shared boards current
   } catch (err) {
     console.error('Drive save error:', err.message);
     if (err instanceof AuthError) {
@@ -571,7 +577,8 @@ function applyToken(resp) {
   gAccessToken = resp.access_token;
   gTokenExpiry = Date.now() + (Number(resp.expires_in) || 3600) * 1000;
   needsReauth  = false;
-  try { sessionStorage.setItem(SS_TOKEN, JSON.stringify({ token: gAccessToken, exp: gTokenExpiry })); } catch {}
+  if (resp.scope) gScopes = resp.scope;
+  try { sessionStorage.setItem(SS_TOKEN, JSON.stringify({ token: gAccessToken, exp: gTokenExpiry, scope: gScopes })); } catch {}
   scheduleTokenRefresh();
 }
 
@@ -582,6 +589,7 @@ function restoreToken() {
     if (t?.token && t.exp - Date.now() > TOKEN_SKEW_MS) {
       gAccessToken = t.token;
       gTokenExpiry = t.exp;
+      gScopes = t.scope || '';
       scheduleTokenRefresh();
       return true;
     }
@@ -891,6 +899,9 @@ function resetLocalData() {
   driveFileId = null;
   driveModified = null;
   changeSeq = savedSeq = 0;
+  lsDel(LS_PENDING_REVOKES);
+  shareKeys.clear();
+  lastPublished.clear();
   boards = [defaultBoard()];
   currentBoardId = boards[0].id;
 }
@@ -937,6 +948,7 @@ async function bootData(quiet = false) {
       if (wasOffline && !isDirty()) showToast('Back online — your changes are synced', 'success');
     }
     else setSyncStatus('synced', 'Loaded from Drive ✓');
+    publishShares();
   } catch (err) {
     console.error('bootData error:', err.message);
     showSkeleton(false);
@@ -1019,6 +1031,79 @@ async function handleLogout() {
 
 q('#logout-btn')?.addEventListener('click', handleLogout);
 
+// ─── BACKUP: EXPORT / IMPORT ─────────────────────────────────────────────────
+// A plain .json copy of all boards — a safety net outside Drive and the browser.
+
+function exportBackup() {
+  const data = { app: 'taskboards', version: 1, exportedAt: new Date().toISOString(), boards, currentBoardId };
+  const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }));
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `taskboards-backup-${new Date().toISOString().slice(0, 10)}.json`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  showToast('Backup downloaded', 'success');
+}
+
+// Keep only fields we know, so a hand-edited or foreign file can't inject odd data.
+function cleanBoards(raw) {
+  if (!Array.isArray(raw) || !raw.length) throw new Error('no boards');
+  const boardIds = new Set();
+  return raw.map((b, i) => {
+    if (!b || typeof b !== 'object' || !Array.isArray(b.cards)) throw new Error('bad board');
+    const id = typeof b.id === 'string' && b.id && !boardIds.has(b.id) ? b.id : uid();
+    boardIds.add(id);
+    const cards = TBShare.cleanCards(b.cards, uid);
+    const name = typeof b.name === 'string' && b.name.trim() ? b.name.trim() : `Board ${i + 1}`;
+    return { id, name, cards, createdAt: Number(b.createdAt) || Date.now() };
+  });
+}
+
+async function importBackup(file) {
+  let imported, parsed;
+  try {
+    if (file.size > 20e6) throw new Error('file too large');
+    parsed = JSON.parse(await file.text());
+    imported = cleanBoards(parsed?.boards ?? parsed);   // also accepts the raw Drive file
+  } catch (e) {
+    console.warn('import failed:', e.message);
+    showToast('That file isn’t a valid Taskboards backup', 'error');
+    return;
+  }
+  const nCards = imported.reduce((n, b) => n + b.cards.length, 0);
+  // Public links belong to the boards they were made for: keep them for boards that are
+  // still in the file, and take the rest offline rather than leave them orphaned.
+  const current = new Map(boards.map(b => [b.id, b]));
+  imported.forEach(b => { const o = current.get(b.id); if (o?.share) b.share = o.share; });
+  const kept = new Set(imported.filter(b => b.share).map(b => b.share.fileId));
+  const orphaned = boards.filter(b => b.share?.fileId && !kept.has(b.share.fileId));
+  if (!confirm(
+    `Replace ALL your current boards with the ${imported.length} board(s) and ${nCards} card(s) in "${file.name}"?\n\n` +
+    (orphaned.length ? `${orphaned.length} shared board(s) will stop being shared.\n\n` : '') +
+    'Tip: export a backup of your current boards first — this can’t be undone.'
+  )) return;
+  orphaned.forEach(b => queueRevoke(b.share.fileId));
+
+  boards = imported;
+  currentBoardId = imported.find(b => b.id === parsed?.currentBoardId)?.id || imported[0].id;
+  tabPage = 0;
+  onDataChanged();   // saved locally now, synced to Drive as usual
+  renderTabs();
+  renderOwnerFilterChips();
+  renderBoard();
+  showToast(`Imported ${imported.length} board(s)`, 'success');
+}
+
+q('#export-btn')?.addEventListener('click', exportBackup);
+q('#import-btn')?.addEventListener('click', () => q('#import-file').click());
+q('#import-file')?.addEventListener('change', e => {
+  const file = e.target.files[0];
+  e.target.value = '';   // allow re-importing the same file
+  if (file) importBackup(file);
+});
+
 // Keep the Drive copy fresh and complete as the tab/device comes and goes
 document.addEventListener('visibilitychange', async () => {
   if (!driveReady) return;
@@ -1030,12 +1115,307 @@ window.addEventListener('pagehide', flushSave);
 window.addEventListener('online', () => {
   if (offlineMode) { showToast('Back online — syncing…', 'info'); reconcile(); return; }
   if (driveReady && isDirty()) driveSaveData();
+  publishShares();
 });
 window.addEventListener('offline', () => {
   if (!driveReady) return;
   setSyncStatus('error', 'Offline — saved on this device');
   showToast('You’re offline — changes are kept here and sync later', 'info');
 });
+
+// ─── SHARING: read-only public link, encrypted with a passphrase ─────────────
+// Sharing is per board. A shared board is copied to ONE separate Drive file that anyone
+// with the link can download, but its content is AES-encrypted with a passphrase that only
+// the owner and the people they tell know (see share-core.js). Every other board stays
+// private, and the owner's own copy remains the only editable one: the shared file is
+// overwritten whenever the board changes, so viewers always see the latest version.
+// Revoking deletes the file, which kills the link for good.
+class ShareError extends Error {}
+
+const LS_PENDING_REVOKES = 'taskboards-pending-revokes';   // shared files still to delete (board deleted offline…)
+const shareKeys     = new Map();   // boardId → CryptoKey (derived once per session)
+const lastPublished = new Map();   // boardId → snapshot already on Drive
+let sharePublishing = false;
+let shareRetryTimer = null;
+let shareRetryDelay = 0;
+let shareModalBoardId = null;
+
+const hasShareScope = () => gScopes.includes(DRIVE_FILE);
+const shareUrl      = board => `${location.origin}/view.html?b=${encodeURIComponent(board.share.fileId)}`;
+
+// What a viewer gets: the board's name and cards — nothing else
+const sharePayload = board => ({
+  v: 1,
+  name: board.name,
+  cards: board.cards.map(c => ({
+    id: c.id, title: c.title, owner: c.owner || '', dueDate: c.dueDate || '',
+    status: c.status, createdAt: c.createdAt, sortOrder: c.sortOrder
+  }))
+});
+
+async function shareEnvelope(board, share = board.share) {
+  let key = shareKeys.get(board.id);
+  if (!key || share !== board.share) key = await TBShare.deriveKey(share.passphrase, share.salt);
+  const payload = sharePayload(board);
+  const env = await TBShare.encrypt({ ...payload, publishedAt: Date.now() }, key, share.salt);
+  return { key, snapshot: JSON.stringify(payload), body: JSON.stringify(env) };
+}
+
+// Make this board public (read-only). Throws ShareError('scope') if Google hasn't granted file access yet.
+async function shareCreate(board) {
+  if (!hasShareScope()) throw new ShareError('scope');
+  const share = { fileId: null, passphrase: TBShare.generatePassphrase(), salt: TBShare.newSalt(), createdAt: Date.now() };
+  const { key, snapshot, body } = await shareEnvelope(board, share);
+
+  const boundary = 'taskboards_share_' + Date.now();
+  const multipart = [
+    `--${boundary}`,
+    'Content-Type: application/json; charset=UTF-8',
+    '',
+    JSON.stringify({ name: `Taskboards — ${board.name}`, mimeType: 'application/json' }),
+    `--${boundary}`,
+    'Content-Type: application/json',
+    '',
+    body,
+    `--${boundary}--`
+  ].join('\r\n');
+  const r = await driveFetch(`${DRIVE_UPLOAD_API}/files?uploadType=multipart&fields=id`, {
+    method: 'POST',
+    headers: { 'Content-Type': `multipart/related; boundary=${boundary}` },
+    body: multipart
+  });
+  if (r.status === 403) throw new ShareError('scope');
+  if (!r.ok) throw new Error(`create ${r.status}`);
+  share.fileId = (await r.json()).id;
+  if (!share.fileId) throw new Error('no file id');
+
+  // Anyone with the link can download it — but it is encrypted, and not listed or searchable
+  const p = await driveFetch(`${DRIVE_API}/files/${share.fileId}/permissions`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ role: 'reader', type: 'anyone', allowFileDiscovery: false })
+  });
+  if (!p.ok) {
+    await driveFetch(`${DRIVE_API}/files/${share.fileId}`, { method: 'DELETE' }).catch(() => {});
+    throw new Error(`permission ${p.status}`);
+  }
+
+  board.share = share;
+  shareKeys.set(board.id, key);
+  lastPublished.set(board.id, snapshot);
+  onDataChanged();
+  renderTabs();
+}
+
+// Delete the shared copy; the link stops working immediately. Nothing changes if this fails.
+async function shareRevoke(board) {
+  const r = await driveFetch(`${DRIVE_API}/files/${board.share.fileId}`, { method: 'DELETE' });
+  if (!r.ok && r.status !== 404) throw new Error(`revoke ${r.status}`);
+  board.share = null;
+  shareKeys.delete(board.id);
+  lastPublished.delete(board.id);
+  onDataChanged();
+  renderTabs();
+}
+
+// The shared file vanished (deleted in Drive): the board is private again
+function shareLost(board) {
+  board.share = null;
+  shareKeys.delete(board.id);
+  lastPublished.delete(board.id);
+  onDataChanged();
+  renderTabs();
+  showToast(`“${board.name}” is private again — its shared copy was removed from Drive`, 'info');
+}
+
+async function sharePublishOne(board) {
+  const { key, snapshot, body } = await shareEnvelope(board);
+  shareKeys.set(board.id, key);
+  const r = await driveFetch(`${DRIVE_UPLOAD_API}/files/${board.share.fileId}?uploadType=media&fields=id`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body,
+    keepalive: body.length < 60000
+  });
+  if (r.status === 404) return shareLost(board);
+  if (!r.ok) throw new Error(`publish ${r.status}`);
+  lastPublished.set(board.id, snapshot);
+}
+
+// Push any shared board that changed since the last publish (and finish pending revocations)
+async function publishShares() {
+  if (!driveReady || sharePublishing || needsReauth) return;
+  sharePublishing = true;
+  try {
+    await processPendingRevokes();
+    for (const b of boards.filter(b => b.share?.fileId && JSON.stringify(sharePayload(b)) !== lastPublished.get(b.id))) {
+      await sharePublishOne(b);
+    }
+    shareRetryDelay = 0;
+  } catch (e) {
+    console.warn('share publish failed:', e.message);
+    if (!(e instanceof AuthError)) {   // network/5xx: try again, edits are never lost
+      shareRetryDelay = Math.min((shareRetryDelay || 4000) * 2, 60000);
+      clearTimeout(shareRetryTimer);
+      shareRetryTimer = setTimeout(publishShares, shareRetryDelay);
+    }
+  } finally { sharePublishing = false; }
+}
+
+// Deleting a shared board (or replacing everything via import) must also take its public copy offline
+const pendingRevokes = () => { try { return JSON.parse(lsGet(LS_PENDING_REVOKES)) || []; } catch { return []; } };
+function queueRevoke(fileId) {
+  const list = pendingRevokes();
+  if (!list.includes(fileId)) { list.push(fileId); lsSet(LS_PENDING_REVOKES, JSON.stringify(list)); }
+}
+async function processPendingRevokes() {
+  const list = pendingRevokes();
+  if (!list.length) return;
+  const left = [];
+  for (const id of list) {
+    try {
+      const r = await driveFetch(`${DRIVE_API}/files/${id}`, { method: 'DELETE' });
+      if (!r.ok && r.status !== 404) left.push(id);
+    } catch (e) { if (e instanceof AuthError) throw e; left.push(id); }
+  }
+  if (left.length) lsSet(LS_PENDING_REVOKES, JSON.stringify(left)); else lsDel(LS_PENDING_REVOKES);
+}
+
+// ── share dialog ─────────────────────────────────────────────────────────────
+async function copyText(text) {
+  try { await navigator.clipboard.writeText(text); return true; } catch {}
+  try {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.cssText = 'position:fixed;opacity:0;top:0;left:0';
+    document.body.appendChild(ta);
+    ta.select();
+    const ok = document.execCommand('copy');
+    ta.remove();
+    return ok;
+  } catch { return false; }
+}
+
+const shareBoard = () => boards.find(b => b.id === shareModalBoardId);
+
+function openShareModal(boardId) {
+  shareModalBoardId = boardId;
+  renderShareModal();
+  q('#share-overlay').classList.remove('hidden');
+}
+function closeShareModal() {
+  q('#share-overlay').classList.add('hidden');
+  shareModalBoardId = null;
+}
+
+// state: { busy: 'text' } | { needScope: true } | { error: 'text' }
+function renderShareModal(state = {}) {
+  const board = shareBoard();
+  if (!board) { closeShareModal(); return; }
+  const body = q('#share-body');
+  q('#share-title').textContent = board.share ? '🚀 PUBLIC BOARD' : '🔒 PRIVATE BOARD';
+
+  if (state.busy) { body.innerHTML = `<p class="share__text">${esc(state.busy)}</p>`; return; }
+
+  const err = state.error ? `<p class="share__error">${esc(state.error)}</p>` : '';
+
+  if (!board.share && !DRIVE_API_KEY) {
+    body.innerHTML = `
+      <p class="share__text">Only you can see <strong>${esc(board.name)}</strong>.</p>
+      <p class="share__note">Board sharing isn’t enabled on this site yet.</p>`;
+    return;
+  }
+
+  if (!board.share) {
+    body.innerHTML = `
+      <p class="share__text">Only you can see <strong>${esc(board.name)}</strong>.</p>
+      <p class="share__text share__text--dim">Share a read-only link: anyone with the link <em>and</em> the passphrase can see the latest version of this board. Your other boards stay private.</p>
+      ${state.needScope ? '<p class="share__note">Sharing needs one more Google permission — to create the shared copy of this board in your Drive.</p>' : ''}
+      ${err}
+      <div class="share__actions">
+        <button class="modal__submit" data-act="${state.needScope ? 'grant' : 'create'}">${state.needScope ? 'GRANT PERMISSION' : 'SHARE LINK'}</button>
+      </div>`;
+    return;
+  }
+
+  body.innerHTML = `
+    <div class="modal__field">
+      <label class="modal__label" for="share-link">LINK</label>
+      <div class="share__row"><input class="modal__input" id="share-link" readonly value="${esc(shareUrl(board))}" /><button class="share__copy" data-act="copy" data-target="share-link">COPY</button></div>
+    </div>
+    <div class="modal__field">
+      <label class="modal__label" for="share-pass">PASSPHRASE</label>
+      <div class="share__row"><input class="modal__input share__pass" id="share-pass" readonly value="${esc(board.share.passphrase)}" /><button class="share__copy" data-act="copy" data-target="share-pass">COPY</button></div>
+    </div>
+    <p class="share__text share__text--dim">Read-only. Viewers see the latest version of <strong>${esc(board.name)}</strong> — your edits are published within seconds. Only this board is shared.</p>
+    ${err}
+    <div class="share__actions">
+      <button class="modal__submit" data-act="copy-all">COPY SHARE DETAILS</button>
+      <button class="modal__submit modal__submit--danger" data-act="revoke">REVOKE PUBLIC ACCESS</button>
+    </div>`;
+}
+
+function shareErrorState(e) {
+  if (e instanceof ShareError) return { needScope: true };
+  if (e instanceof AuthError) return { error: 'Your Google session expired — reconnect and try again.' };
+  return { error: 'Couldn’t reach Google Drive — check your connection and try again. Nothing was changed.' };
+}
+
+async function onShareAction(act, target) {
+  const board = shareBoard();
+  if (!board) return;
+
+  if (act === 'copy') {
+    const ok = await copyText(q('#' + target).value);
+    showToast(ok ? 'Copied' : 'Couldn’t copy — select the text and copy it manually', ok ? 'success' : 'error');
+    return;
+  }
+  if (act === 'copy-all') {
+    const text = `Taskboards — ${board.name}\nLink: ${shareUrl(board)}\nPassphrase: ${board.share.passphrase}`;
+    const ok = await copyText(text);
+    showToast(ok ? 'Share details copied' : 'Couldn’t copy — select the text and copy it manually', ok ? 'success' : 'error');
+    return;
+  }
+
+  if (act === 'grant') {
+    flushSave();
+    if (AUTH_API) { startServerLogin(false); return; }   // Google asks again, then brings the user back
+    renderShareModal({ busy: 'Waiting for Google…' });
+    const resp = await requestToken('consent', loginHint?.email);
+    renderShareModal(!resp ? { error: gateErrorMessage(lastAuthError) } : hasShareScope() ? {} : { needScope: true });
+    return;
+  }
+
+  if (act === 'create') {
+    if (!driveReady || !navigator.onLine) { renderShareModal({ error: 'Sharing needs a connection to Google Drive — try again when you’re online.' }); return; }
+    if (!hasShareScope()) { renderShareModal({ needScope: true }); return; }
+    renderShareModal({ busy: 'Creating the shared copy…' });
+    try {
+      await shareCreate(board);
+      renderShareModal();
+      showToast('Board is now public (read-only)', 'success');
+    } catch (e) { renderShareModal(shareErrorState(e)); }
+    return;
+  }
+
+  if (act === 'revoke') {
+    if (!confirm(`Stop sharing “${board.name}”?\n\nThe public copy is deleted and the link stops working immediately. The board stays in your account.`)) return;
+    renderShareModal({ busy: 'Revoking public access…' });
+    try {
+      await shareRevoke(board);
+      renderShareModal();
+      showToast('Board is private again', 'success');
+    } catch (e) { renderShareModal(shareErrorState(e)); }
+  }
+}
+
+q('#share-body').addEventListener('click', e => {
+  const btn = e.target.closest('[data-act]');
+  if (btn) onShareAction(btn.dataset.act, btn.dataset.target);
+});
+q('#share-close').addEventListener('click', closeShareModal);
+q('#share-overlay').addEventListener('click', e => { if (e.target === q('#share-overlay')) closeShareModal(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && shareModalBoardId) closeShareModal(); });
 
 // ─── CHANGE HANDLER ───────────────────────────────────────────────────────────
 function onDataChanged() {
@@ -1060,6 +1440,8 @@ function addBoard() {
 
 function deleteBoard(id) {
   if (boards.length <= 1) return;
+  const gone = boards.find(b => b.id === id);
+  if (gone?.share?.fileId) queueRevoke(gone.share.fileId);   // its public copy goes with it
   boards = boards.filter(b => b.id !== id);
   if (currentBoardId === id) currentBoardId = boards[Math.max(0, boards.length-1)].id;
   tabPage = Math.min(tabPage, Math.floor((boards.length-1)/dynamicTabsPerPage));
@@ -1218,7 +1600,7 @@ function computeTabsPerPage() {
     const t = document.createElement('div');
     t.className = 'board-tab';
     t.style.cssText = 'flex-shrink:0;white-space:nowrap;';
-    t.innerHTML = `<span class="board-tab__name">${esc(board.name)}</span>${boards.length > 1 ? '<button class="board-tab__delete" style="pointer-events:none">✕</button>' : ''}`;
+    t.innerHTML = `<button class="board-tab__share" style="pointer-events:none">🔒</button><span class="board-tab__name">${esc(board.name)}</span>${boards.length > 1 ? '<button class="board-tab__delete" style="pointer-events:none">✕</button>' : ''}`;
     probe.appendChild(t);
     totalW += t.getBoundingClientRect().width + 4;
     if (totalW <= availW) count++;
@@ -1249,6 +1631,7 @@ function renderTabs() {
     tab.dataset.id = board.id;
     tab.style.setProperty('--tab-color', tabColor(board.id));
     tab.innerHTML = `
+      <button class="board-tab__share" title="${board.share ? 'Public (read-only) — click for share details' : 'Private — click to share'}" aria-label="${board.share ? 'Public board — share details' : 'Private board — share'}">${board.share ? '🚀' : '🔒'}</button>
       <span class="board-tab__name">${esc(board.name)}</span>
       ${boards.length > 1 ? `<button class="board-tab__delete" title="Delete board">✕</button>` : ''}
     `;
@@ -1256,8 +1639,15 @@ function renderTabs() {
     // Click to switch
     tab.addEventListener('click', e => {
       if (e.target.closest('.board-tab__delete')) return;
+      if (e.target.closest('.board-tab__share')) return;
       if (e.target.closest('.board-tab__name-input')) return;
       switchBoard(board.id);
+    });
+
+    // Lock / rocket: open the share dialog for THIS board
+    tab.querySelector('.board-tab__share').addEventListener('click', e => {
+      e.stopPropagation();
+      openShareModal(board.id);
     });
 
     // Double-click name to rename
