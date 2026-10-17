@@ -50,6 +50,14 @@
     <span class="view__meta" id="view-meta">Read-only</span>
   </div>
 
+  <!-- ── ARCHIVE (above the board, like in the app) ── -->
+  <div class="view__shelves view__shelves--top">
+    <details class="view__shelf view__shelf--archive">
+      <summary>◈ ARCHIVE <span class="shelf__count" id="archive-count">0</span></summary>
+      <div class="view__shelf-cards" id="archive-cards"></div>
+    </details>
+  </div>
+
   <!-- ── BOARD (read-only) ── -->
   <main class="board" id="board">
     <section class="column column--todo" data-zone="todo">
@@ -72,10 +80,6 @@
   </main>
 
   <div class="view__shelves">
-    <details class="view__shelf view__shelf--archive">
-      <summary>◈ ARCHIVE <span class="shelf__count" id="archive-count">0</span></summary>
-      <div class="view__shelf-cards" id="archive-cards"></div>
-    </details>
     <details class="view__shelf view__shelf--done">
       <summary>✓ DONE <span class="shelf__count" id="done-count">0</span></summary>
       <div class="view__shelf-cards" id="done-cards"></div>

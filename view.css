@@ -41,7 +41,8 @@ body.view.locked .view__shelves { display: none; }
   flex-shrink: 0; max-height: 40dvh; overflow-y: auto;
   background: var(--f-bg1); border-top: 1px solid var(--f-stroke2);
 }
-.view__shelf + .view__shelf { border-top: 1px solid var(--f-stroke2); }
+/* Archive sits above the board, Done below — same layout as the app */
+.view__shelves--top { border-top: none; border-bottom: 1px solid var(--f-stroke2); }
 .view__shelf summary {
   cursor: pointer; padding: 10px 16px;
   font-size: .75rem; font-weight: 600; letter-spacing: .04em; color: var(--f-fg3);
