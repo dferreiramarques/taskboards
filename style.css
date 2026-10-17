@@ -627,7 +627,7 @@ body.dragging-active .shelf--done    .drop-overlay { display: flex; }
 .column--inprogress .column__dot { background: var(--f-inprog); }
 
 .column__title {
-  font-size: .6875rem;
+  font-size: .859rem;   /* 125% of the old .6875rem — sets the two active columns apart */
   font-weight: 600;
   letter-spacing: .04em;
   text-transform: uppercase;
