@@ -8,3 +8,14 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
+      # Session server (auth.js). Secrets are set in the Render dashboard, never here.
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: COOKIE_SECRET
+        generateValue: true
+      - key: AUTH_BASE_URL
+        sync: false
+      - key: APP_ORIGIN
+        value: https://taskboards.monco.io

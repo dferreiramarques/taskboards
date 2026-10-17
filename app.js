@@ -13,6 +13,10 @@ const DRIVE_FOLDER      = 'appDataFolder';
 const DRIVE_API         = 'https://www.googleapis.com/drive/v3';
 const DRIVE_UPLOAD_API  = 'https://www.googleapis.com/upload/drive/v3';
 
+// Optional session server (see auth.js). When set, the app keeps a long-lived
+// Google session through it instead of re-asking Google every hour.
+const AUTH_API          = ((window.TASKBOARDS_CONFIG || {}).AUTH_API || '').replace(/\/$/, '');
+
 const SUPABASE_URL      = (window.TASKBOARDS_CONFIG || {}).SUPABASE_URL || '';
 const SUPABASE_ANON_KEY = (window.TASKBOARDS_CONFIG || {}).SUPABASE_ANON_KEY || '';
 
@@ -271,7 +275,7 @@ function setDriveModified(t) {
 // Authenticated fetch: always uses a fresh token and retries once on a 401.
 async function driveFetch(url, opts = {}, canRetry = true) {
   const token = await ensureToken();
-  if (!token) throw new AuthError('Session expired');
+  if (!token) throw authTransient ? new Error('Sign-in service unreachable') : new AuthError('Session expired');
   const r = await fetch(url, { ...opts, headers: { ...(opts.headers || {}), Authorization: `Bearer ${token}` } });
   if (r.status === 401) {
     if (!canRetry) throw new AuthError('Session expired');
@@ -553,6 +557,8 @@ let authWaiters   = [];
 let authTimeout   = null;
 let lastAuthError = null;
 let lastSilentFailAt = 0;
+let authTransient = false;        // last renewal failed for a reason that isn't "sign in again"
+let refreshInFlight = null;
 
 const tokenFresh = (margin = 30000) => !!gAccessToken && Date.now() < gTokenExpiry - margin;
 const hasDriveScope = resp => google.accounts.oauth2.hasGrantedAllScopes(resp, DRIVE_APPDATA);
@@ -609,13 +615,57 @@ function requestToken(prompt, hint) {
 async function ensureToken() {
   if (tokenFresh(TOKEN_SKEW_MS)) return gAccessToken;
   const fallback = () => (tokenFresh() ? gAccessToken : null);
-  if (needsReauth || !tokenClient) return fallback();
+  authTransient = false;
+  if (needsReauth) return fallback();
+
+  if (AUTH_API) {
+    // Session server: a refresh token (kept in an httpOnly cookie) renews it with no popup
+    const res = await serverRefresh();
+    if (res.status === 'ok') return gAccessToken;
+    authTransient = res.status === 'transient';
+    return fallback();
+  }
+
+  if (!tokenClient) return fallback();
   if (Date.now() - lastSilentFailAt < 60000) return fallback();   // don't spam popups
   const resp = await requestToken('', loginHint?.email);
   if (resp) return gAccessToken;
   lastSilentFailAt = Date.now();
   return fallback();
 }
+
+// New access token from the session server. 'reauth' = no/dead session (sign in
+// again); 'transient' = server asleep or offline (keep going, try later).
+function serverRefresh() {
+  refreshInFlight ??= (async () => {
+    const ctl = new AbortController();
+    const timer = setTimeout(() => ctl.abort(), 45000);   // free hosts take a while to wake up
+    try {
+      const r = await fetch(`${AUTH_API}/auth/refresh`, { method: 'POST', credentials: 'include', signal: ctl.signal });
+      if (r.ok) { applyToken(await r.json()); return { status: 'ok' }; }
+      if (r.status === 401) return { status: 'reauth' };
+      return { status: 'transient' };
+    } catch { return { status: 'transient' }; }
+    finally { clearTimeout(timer); refreshInFlight = null; }
+  })();
+  return refreshInFlight;
+}
+
+function startServerLogin(switchAccount) {
+  const u = new URL(`${AUTH_API}/auth/login`);
+  u.searchParams.set('app', location.origin);
+  if (switchAccount || !loginHint?.email) u.searchParams.set('switch', '1');
+  else u.searchParams.set('hint', loginHint.email);
+  setGateStatus('Redirecting to Google…');
+  location.href = u.toString();
+}
+
+function serverAuthErrorMessage(code) {
+  if (code === 'access_denied') return 'Sign-in was cancelled — try again.';
+  if (code === 'scope') return 'Taskboards needs permission to use its private Drive folder — tick the Drive box and try again.';
+  return 'Sign-in didn’t complete — please try again.';
+}
+const SERVER_DOWN_MSG = 'Can’t reach the sign-in service right now — check your connection and try again.';
 
 function gateErrorMessage(type) {
   if (type === 'popup_failed_to_open') return 'Your browser blocked the sign-in window — allow pop-ups for this site and try again.';
@@ -628,6 +678,8 @@ function initGSI() {
   q('#gate-login-btn').addEventListener('click', () => onGateContinue(false));
   q('#gate-switch-btn')?.addEventListener('click', () => onGateContinue(true));
   renderGate();
+
+  if (AUTH_API) { trySilentSignIn(); return; }
 
   if (!GOOGLE_CLIENT_ID) {
     setGateStatus('Google sign-in isn’t configured for this deployment.');
@@ -664,6 +716,15 @@ function initGSI() {
 
 // On load: pick up where the user left off without a click if Google allows.
 async function trySilentSignIn() {
+  if (AUTH_API) {
+    const err = new URLSearchParams(location.search).get('auth_error');
+    if (err) { history.replaceState(null, '', location.pathname); setGateStatus(serverAuthErrorMessage(err)); }
+    if (restoreToken()) { await completeSignIn(); return; }
+    const res = await serverRefresh();
+    if (res.status === 'ok') await completeSignIn();
+    else if (res.status === 'transient') setGateStatus(SERVER_DOWN_MSG);
+    return;
+  }
   if (restoreToken()) { await completeSignIn(); return; }
   if (!loginHint) return;
   const resp = await requestToken('', loginHint.email);
@@ -671,13 +732,36 @@ async function trySilentSignIn() {
   else setGateStatus('');   // popup blocked or session gone — one click continues
 }
 
+// Token in hand: reopen the app (first sign-in) or just resume syncing (reconnect).
+async function afterToken(switchAccount) {
+  if (driveReady && !switchAccount) {
+    hideAuthGate();
+    setGateStatus('');
+    if (isDirty()) driveSaveData();
+    return;
+  }
+  await completeSignIn();
+}
+
 async function onGateContinue(switchAccount) {
-  if (!tokenClient) { setGateStatus('Loading Google sign-in…'); return; }
+  if (!AUTH_API && !tokenClient) { setGateStatus('Loading Google sign-in…'); return; }
   const btn = q('#gate-login-btn');
   btn.disabled = true;
   try {
     // Retrying after a failed Drive load: the token is still good, skip Google
     if (!switchAccount && !needsReauth && tokenFresh()) { await completeSignIn(); return; }
+
+    if (AUTH_API) {
+      if (!switchAccount) {
+        // A session may still be alive (e.g. the server was only asleep) — try that first
+        setGateStatus('Signing you in…');
+        const res = await serverRefresh();
+        if (res.status === 'ok') { needsReauth = false; await afterToken(false); return; }
+        if (res.status === 'transient') { setGateStatus(SERVER_DOWN_MSG); return; }
+      }
+      startServerLogin(switchAccount);
+      return;
+    }
 
     setGateStatus('Opening Google sign-in…');
     const prompt = needConsent ? 'consent' : (switchAccount || !loginHint ? 'select_account' : '');
@@ -691,13 +775,7 @@ async function onGateContinue(switchAccount) {
     }
     needConsent = false;
 
-    if (driveReady && !switchAccount) {   // mid-session reconnect: nothing to reload
-      hideAuthGate();
-      setGateStatus('');
-      if (isDirty()) driveSaveData();
-      return;
-    }
-    await completeSignIn();
+    await afterToken(switchAccount);
   } finally {
     btn.disabled = false;
   }
@@ -812,7 +890,10 @@ async function handleLogout() {
     if (isDirty() && !confirm('Some changes haven’t reached Drive yet and will be lost if you sign out. Sign out anyway?')) return;
   }
 
-  if (gAccessToken && window.google?.accounts?.oauth2) {
+  if (AUTH_API) {
+    // Revokes the refresh token at Google and clears the session cookie
+    try { await fetch(`${AUTH_API}/auth/logout`, { method: 'POST', credentials: 'include' }); } catch {}
+  } else if (gAccessToken && window.google?.accounts?.oauth2) {
     google.accounts.oauth2.revoke(gAccessToken, () => {});
   }
   clearTimeout(refreshTimer);
@@ -853,7 +934,7 @@ document.addEventListener('visibilitychange', async () => {
   if (!driveReady) return;
   if (document.visibilityState === 'hidden') { flushSave(); return; }
   if (await ensureToken()) driveRefreshIfNewer();
-  else requestReconnect();
+  else if (!authTransient) requestReconnect();
 });
 window.addEventListener('pagehide', flushSave);
 window.addEventListener('online', () => { if (driveReady && isDirty()) driveSaveData(); });

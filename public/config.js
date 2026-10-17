@@ -19,6 +19,14 @@
 window.TASKBOARDS_CONFIG = {
   GOOGLE_CLIENT_ID: '56980482877-s9ueo6802dlvbf88qqkic21rddgmj0ic.apps.googleusercontent.com',   // ← paste your Client ID here, e.g. '123456.apps.googleusercontent.com'
 
+  // ─── Long-lived sessions (optional) ───────────────────────────────────────
+  // URL of the Taskboards session server (auth.js, deployed with server.js).
+  // It keeps a Google refresh token in an encrypted cookie so you stay signed in
+  // without Google re-asking every hour. It never sees or stores your boards.
+  // Leave blank to use Google's browser-only sign-in (re-auth about every hour).
+  // Must share a "site" with this page, e.g. https://auth.monco.io for taskboards.monco.io.
+  AUTH_API: '',
+
   // ─── Anonymous unique-sign-in counter (optional) ──────────────────────────
   // Not a secret — this key can only insert/update a one-way hash of the
   // signed-in user's Google id (see users_seen table RLS policies). It can
