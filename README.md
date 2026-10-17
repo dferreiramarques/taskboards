@@ -103,22 +103,22 @@ Google’s browser-only sign-in only gives 1-hour tokens, so without this the ap
 
 **Set it up (one time)**
 
-1. **Deploy this repo as a web service** (`render.yaml` is ready for Render) and give it a custom domain **on the same site as the app** — e.g. `auth.monco.io` for `taskboards.monco.io` (add a CNAME). Same site is what keeps the cookie first-party, so browsers don’t block it.
+1. **Deploy this repo on Railway** (see below — any Node host works) and give the service a custom domain **on the same site as the app** — e.g. `auth.monco.io` for `taskboards.monco.io`. In Railway: service → **Settings → Networking → Custom Domain**, then add the CNAME it shows at your DNS. Same site is what keeps the cookie first-party, so browsers don’t block it.
 2. **Google Cloud Console → Credentials → your OAuth client**: add the authorized redirect URI `https://auth.monco.io/auth/callback`, and copy the **Client secret**.
-3. **Set these environment variables** on the service (see `.env.example`):
+3. **Set these environment variables** in Railway → **Variables** (see `.env.example`):
 
    | Variable | Value |
    |---|---|
    | `GOOGLE_CLIENT_ID` | the same Client ID as in `config.js` |
    | `GOOGLE_CLIENT_SECRET` | the client secret from step 2 (**keep it secret**) |
-   | `COOKIE_SECRET` | a long random string (encrypts the cookie) |
+   | `COOKIE_SECRET` | a long random string, e.g. `openssl rand -hex 32` (encrypts the cookie) |
    | `AUTH_BASE_URL` | `https://auth.monco.io` |
    | `APP_ORIGIN` | `https://taskboards.monco.io` (comma-separate more origins) |
 
 4. Set `AUTH_API: 'https://auth.monco.io'` in `config.js` and push.
 5. In the OAuth consent screen, publishing status must be **In production** (in *Testing*, Google expires refresh tokens after 7 days).
 
-> Free hosting sleeps when idle, so the first sign-in after a quiet spell can take ~30 s. A paid instance (or a keep-warm ping) avoids that.
+> Railway keeps the service running (unless you turn on *App Sleeping*), so there is no cold start. On a host that sleeps when idle, the first sign-in after a quiet spell can take ~30 s.
 
 ---
 
@@ -126,7 +126,7 @@ Google’s browser-only sign-in only gives 1-hour tokens, so without this the ap
 
 1. Fork or push this repo to GitHub
 2. [railway.app](https://railway.app) → **New Project → Deploy from GitHub repo**
-3. No environment variables needed — the Client ID lives in `public/config.js`
+3. Variables: none needed for the app itself — the Client ID lives in `public/config.js`. The optional session server needs the variables listed above
 4. Railway auto-deploys on every push to `main`
 
 ---

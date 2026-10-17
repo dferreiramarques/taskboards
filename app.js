@@ -421,7 +421,7 @@ async function driveSaveData() {
       // Network/5xx: keep the edits, retry with backoff (also on `online`)
       retryDelay = Math.min((retryDelay || 2000) * 2, 60000);
       retryTimer = setTimeout(driveSaveData, retryDelay);
-      setSyncStatus('error', 'Save failed — retrying…');
+      setSyncStatus('error', navigator.onLine ? 'Save failed — retrying…' : 'Offline — saved on this device');
     }
   } finally {
     saving = false;
@@ -559,6 +559,10 @@ let lastAuthError = null;
 let lastSilentFailAt = 0;
 let authTransient = false;        // last renewal failed for a reason that isn't "sign in again"
 let refreshInFlight = null;
+let offlineMode   = false;        // working from the local copy until Drive is reachable
+let reconcileTimer = null;
+let reconciling   = false;
+let gsiWaiting    = false;
 
 const tokenFresh = (margin = 30000) => !!gAccessToken && Date.now() < gTokenExpiry - margin;
 const hasDriveScope = resp => google.accounts.oauth2.hasGrantedAllScopes(resp, DRIVE_APPDATA);
@@ -616,6 +620,7 @@ async function ensureToken() {
   if (tokenFresh(TOKEN_SKEW_MS)) return gAccessToken;
   const fallback = () => (tokenFresh() ? gAccessToken : null);
   authTransient = false;
+  if (!navigator.onLine) { authTransient = true; return fallback(); }
   if (needsReauth) return fallback();
 
   if (AUTH_API) {
@@ -674,6 +679,101 @@ function gateErrorMessage(type) {
 }
 
 // ─── GOOGLE IDENTITY SERVICES ────────────────────────────────────────────────
+function createTokenClient() {
+  tokenClient = google.accounts.oauth2.initTokenClient({
+    client_id: GOOGLE_CLIENT_ID,
+    scope: DRIVE_SCOPE,
+    callback: resp => {
+      if (resp.error) return settleAuth(null, resp.error);
+      applyToken(resp);
+      settleAuth(resp);
+    },
+    error_callback: err => settleAuth(null, err?.type || 'error')
+  });
+}
+
+// Wait for the GSI library (an ad-blocker can stop it entirely)
+function waitForGsi() {
+  if (gsiWaiting) return;
+  gsiWaiting = true;
+  const started = Date.now();
+  const timer = setInterval(() => {
+    if (!window.google?.accounts?.oauth2) {
+      if (Date.now() - started > 15000) {
+        clearInterval(timer);
+        gsiWaiting = false;
+        if (!offlineMode) setGateStatus('Couldn’t load Google sign-in — check your connection or content blocker, then reload.');
+      }
+      return;
+    }
+    clearInterval(timer);
+    gsiWaiting = false;
+    createTokenClient();
+    if (offlineMode) return;   // reconcile() takes it from here
+    setGateStatus('');
+    trySilentSignIn();
+  }, 200);
+}
+
+// The page's own <script> fails when it loads offline — fetch it again later
+function ensureGsiLoaded() {
+  if (window.google?.accounts?.oauth2) { if (!tokenClient) createTokenClient(); return; }
+  if (!document.querySelector('script[data-gsi-retry]')) {
+    const el = document.createElement('script');
+    el.src = 'https://accounts.google.com/gsi/client';
+    el.async = true;
+    el.dataset.gsiRetry = '1';
+    el.onerror = () => el.remove();
+    document.head.appendChild(el);
+  }
+  waitForGsi();
+}
+
+// ─── OFFLINE ─────────────────────────────────────────────────────────────────
+// If Drive can't be reached but this device has signed in before, keep working
+// from the local copy. Edits stay flagged as unsynced; as soon as Drive is
+// reachable bootData() decides who is newer — upload ours, or ask on a real conflict.
+const hasOfflineProfile = () => !!(lsGet(LS_SUB) && loginHint?.email);
+
+function enterOfflineMode() {
+  const first = !offlineMode;
+  offlineMode = true;
+  driveReady  = false;          // nothing is written to Drive until we've compared versions
+  gUser = gUser || loginHint;
+  showUserPill();
+  showSkeleton(false);
+  renderTabs();
+  renderOwnerFilterChips();
+  renderBoard();
+  hideAuthGate();
+  setGateStatus('');
+  setSyncStatus('error', navigator.onLine ? 'Drive unreachable — saved on this device' : 'Offline — saved on this device');
+  if (first) showToast('Offline — your changes are kept here and sync when you’re back', 'info');
+  scheduleReconcile();
+}
+
+function leaveOfflineMode() { offlineMode = false; clearTimeout(reconcileTimer); }
+
+function scheduleReconcile(delay = 20000) {
+  clearTimeout(reconcileTimer);
+  reconcileTimer = setTimeout(reconcile, delay);
+}
+
+// Try to get back in sync with Drive.
+async function reconcile() {
+  if (!offlineMode || reconciling) return;
+  if (!navigator.onLine) return scheduleReconcile();
+  if (!AUTH_API && !tokenClient) { ensureGsiLoaded(); return scheduleReconcile(5000); }
+  reconciling = true;
+  try {
+    if (!tokenFresh() && !(await ensureToken())) {
+      if (authTransient) return scheduleReconcile();
+      return requestReconnect();   // the session is gone — one click needed
+    }
+    await completeSignIn(true);
+  } finally { reconciling = false; }
+}
+
 function initGSI() {
   q('#gate-login-btn').addEventListener('click', () => onGateContinue(false));
   q('#gate-switch-btn')?.addEventListener('click', () => onGateContinue(true));
@@ -687,31 +787,8 @@ function initGSI() {
     return;
   }
 
-  // Wait for GSI library to load (an ad-blocker can stop it entirely)
-  const started = Date.now();
-  const waitGSI = setInterval(() => {
-    if (!window.google?.accounts?.oauth2) {
-      if (Date.now() - started > 15000) {
-        clearInterval(waitGSI);
-        setGateStatus('Couldn’t load Google sign-in — check your connection or content blocker, then reload.');
-      }
-      return;
-    }
-    clearInterval(waitGSI);
-
-    tokenClient = google.accounts.oauth2.initTokenClient({
-      client_id: GOOGLE_CLIENT_ID,
-      scope: DRIVE_SCOPE,
-      callback: resp => {
-        if (resp.error) return settleAuth(null, resp.error);
-        applyToken(resp);
-        settleAuth(resp);
-      },
-      error_callback: err => settleAuth(null, err?.type || 'error')
-    });
-    setGateStatus('');
-    trySilentSignIn();
-  }, 200);
+  if (!navigator.onLine && hasOfflineProfile()) enterOfflineMode();   // opened with no connection
+  waitForGsi();
 }
 
 // On load: pick up where the user left off without a click if Google allows.
@@ -722,7 +799,10 @@ async function trySilentSignIn() {
     if (restoreToken()) { await completeSignIn(); return; }
     const res = await serverRefresh();
     if (res.status === 'ok') await completeSignIn();
-    else if (res.status === 'transient') setGateStatus(SERVER_DOWN_MSG);
+    else if (res.status === 'transient') {
+      if (hasOfflineProfile()) enterOfflineMode();
+      else setGateStatus(SERVER_DOWN_MSG);
+    }
     return;
   }
   if (restoreToken()) { await completeSignIn(); return; }
@@ -781,11 +861,11 @@ async function onGateContinue(switchAccount) {
   }
 }
 
-async function completeSignIn() {
-  setGateStatus('Loading your boards…');
+async function completeSignIn(quiet = false) {
+  if (!quiet) setGateStatus('Loading your boards…');
   driveReady = false;
   await loadUser();
-  await bootData();
+  await bootData(quiet);
 }
 
 async function loadUser() {
@@ -816,9 +896,9 @@ function resetLocalData() {
 }
 
 // Decide between this device's copy and Drive's, then open the app.
-async function bootData() {
+async function bootData(quiet = false) {
   setSyncStatus('syncing', 'Loading from Drive…');
-  showSkeleton(true);
+  if (!quiet) showSkeleton(true);
   try {
     const remote      = await driveLoadData();
     const hasRemote   = !!remote?.data.boards.length;
@@ -841,6 +921,8 @@ async function bootData() {
     }
 
     driveReady = true;
+    const wasOffline = offlineMode;
+    leaveOfflineMode();
     showSkeleton(false);
     renderTabs();
     renderOwnerFilterChips();
@@ -849,13 +931,19 @@ async function bootData() {
     setGateStatus('');
     pingUniqueUser(); // fire-and-forget anonymous sign-in counter
 
-    if (upload) { markDirty(); await driveSaveData(); }
+    if (upload) {
+      markDirty();
+      await driveSaveData();
+      if (wasOffline && !isDirty()) showToast('Back online — your changes are synced', 'success');
+    }
     else setSyncStatus('synced', 'Loaded from Drive ✓');
   } catch (err) {
     console.error('bootData error:', err.message);
     showSkeleton(false);
     setSyncStatus('error', 'Load failed');
     if (err instanceof AuthError) { requestReconnect(); return; }
+    // Couldn't reach Drive: a returning user keeps working from the local copy
+    if (hasOfflineProfile()) { enterOfflineMode(); return; }
     // Never save over Drive after a failed load — just offer a retry
     renderGate();
     showAuthGate();
@@ -885,9 +973,10 @@ document.addEventListener('click', e => {
 async function handleLogout() {
   // Don't drop edits that haven't reached Drive without saying so
   clearTimeout(saveTimer);
-  if (driveReady && isDirty()) {
+  const unsynced = () => isDirty() || lsGet(LS_DIRTY) === '1';
+  if ((driveReady || offlineMode) && unsynced()) {
     await driveSaveData();
-    if (isDirty() && !confirm('Some changes haven’t reached Drive yet and will be lost if you sign out. Sign out anyway?')) return;
+    if (unsynced() && !confirm('Some changes haven’t reached Drive yet and will be lost if you sign out. Sign out anyway?')) return;
   }
 
   if (AUTH_API) {
@@ -904,6 +993,7 @@ async function handleLogout() {
   gUser = null;
   loginHint = null;
   driveReady = false;
+  leaveOfflineMode();
   needsReauth = false;
   lsDel(LS_HINT);
   lsDel(LS_SUB);
@@ -937,7 +1027,15 @@ document.addEventListener('visibilitychange', async () => {
   else if (!authTransient) requestReconnect();
 });
 window.addEventListener('pagehide', flushSave);
-window.addEventListener('online', () => { if (driveReady && isDirty()) driveSaveData(); });
+window.addEventListener('online', () => {
+  if (offlineMode) { showToast('Back online — syncing…', 'info'); reconcile(); return; }
+  if (driveReady && isDirty()) driveSaveData();
+});
+window.addEventListener('offline', () => {
+  if (!driveReady) return;
+  setSyncStatus('error', 'Offline — saved on this device');
+  showToast('You’re offline — changes are kept here and sync later', 'info');
+});
 
 // ─── CHANGE HANDLER ───────────────────────────────────────────────────────────
 function onDataChanged() {

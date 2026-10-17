@@ -1,4 +1,4 @@
-const CACHE_NAME = 'taskboards-v24';
+const CACHE_NAME = 'taskboards-v25';
 const ASSETS = ['/', './index.html', './app.html', './style.css', './app.js', './manifest.json', './config.js'];
 
 self.addEventListener('install', e => {
