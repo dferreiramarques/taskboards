@@ -41,10 +41,10 @@
   --f-todo-bg:    rgba(0,120,212,.08);
   --f-inprog:     #ca5010;
   --f-inprog-bg:  rgba(202,80,16,.08);
-  --f-done:       #7160e8;
-  --f-done-bg:    rgba(113,96,232,.08);
-  --f-archive:    #0078d4;
-  --f-archive-bg: rgba(0,120,212,.06);
+  --f-done:       #107c10;
+  --f-done-bg:    rgba(16,124,16,.08);
+  --f-archive:    #808080;
+  --f-archive-bg: rgba(128,128,128,.06);
   /* Shadows (elevation) */
   --f-shadow-c:   rgba(0,0,0,.10);   /* colour of the header's 0 1px 2px shadow; geometry is fixed where it is used */
   --f-shadow2:    0 1px 2px rgba(0,0,0,.06);
@@ -127,10 +127,10 @@
   --f-todo-bg:    rgba(71,158,245,.08);
   --f-inprog:     #ffc83d;
   --f-inprog-bg:  rgba(255,200,61,.08);
-  --f-done:       #c8a9f4;
-  --f-done-bg:    rgba(200,169,244,.08);
-  --f-archive:    #479ef5;
-  --f-archive-bg: rgba(71,158,245,.06);
+  --f-done:       #54b054;
+  --f-done-bg:    rgba(84,176,84,.08);
+  --f-archive:    #808080;
+  --f-archive-bg: rgba(128,128,128,.06);
   --f-shadow-c:   rgba(0,0,0,.55);
   --f-shadow2:    0 1px 2px rgba(0,0,0,.4),0 0 2px rgba(0,0,0,.3);
   --f-shadow4:    0 2px 4px rgba(0,0,0,.4),0 0 2px rgba(0,0,0,.3);
@@ -842,7 +842,7 @@ body.dragging-active .shelf--done    .drop-overlay { display: flex; }
   transition: transform var(--f-fast), filter var(--f-fast);
 }
 .card__edit-btn   { background: var(--f-brand); }
-.card__delete-btn { background: var(--f-danger); }
+.card__delete-btn { background: color-mix(in srgb, var(--f-danger) 14%, var(--f-bg1)); color: var(--f-danger); border: 1px solid var(--f-danger); }
 .card__edit-btn svg { width: 12px; height: 12px; }
 .card__edit-btn:hover,
 .card__delete-btn:hover { transform: scale(1.12); filter: brightness(1.08); }
@@ -1098,9 +1098,9 @@ body.done-expanded .fab { bottom: calc(300px + 24px); }
 }
 .modal__submit:hover { background: var(--f-brand-h); box-shadow: var(--f-shadow8); }
 .modal__submit:active { background: var(--f-brand-a); transform: scale(.99); }
-.modal__submit--danger { background: var(--f-danger); }
-.modal__submit--danger:hover { background: var(--f-danger); filter: brightness(1.1); }
-.modal__submit--danger:active { background: var(--f-danger); filter: brightness(.92); }
+.modal__submit--danger { background: var(--f-danger-bg); color: var(--f-danger); border: 1px solid var(--f-danger); padding: 9px; box-shadow: none; }
+.modal__submit--danger:hover { background: color-mix(in srgb, var(--f-danger) 22%, transparent); box-shadow: none; }
+.modal__submit--danger:active { background: color-mix(in srgb, var(--f-danger) 30%, transparent); }
 
 /* ── Share dialog ── */
 .share__text { font-size: .8125rem; line-height: 1.55; color: var(--f-fg2); }

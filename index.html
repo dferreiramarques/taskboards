@@ -12,6 +12,7 @@
     <meta name="theme-color" content="#E52B50">
     <meta name="description" content="Taskboards is a fast Kanban board — multiple boards, owners, due dates. Sign in with Google and your data lives only in your own Drive. No server, no database.">
     <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -22,12 +23,12 @@
         [data-theme="light"] {
             --primary: #E52B50; --primary-h: #D1264A; --primary-ink: #ffffff;
             --primary-soft: rgba(229, 43, 80, .14); --glow: rgba(229, 43, 80, .10);
-            --z-todo: #0078d4; --z-inprog: #ca5010; --z-done: #7160e8;
+            --z-todo: #0078d4; --z-inprog: #ca5010; --z-done: #107c10;
         }
         [data-theme="dark"] {
             --primary: #F0506E; --primary-h: #F46B84; --primary-ink: #0e0e16;
             --primary-soft: rgba(240, 80, 110, .16); --glow: rgba(240, 80, 110, .12);
-            --z-todo: #479ef5; --z-inprog: #ffa15c; --z-done: #a695f5;
+            --z-todo: #479ef5; --z-inprog: #ffa15c; --z-done: #54b054;
         }
         :root {
             /* names used by the page-specific components below */
@@ -190,7 +191,7 @@
         <div class="wrap topbar__in">
             <a class="brand" href="#top">
                 <span class="brand__mark" aria-hidden="true">
-                    <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="5" height="16" rx="1.5"/><rect x="10" y="4" width="5" height="10" rx="1.5"/><rect x="17" y="4" width="4" height="13" rx="1.5"/></svg>
+                    <svg class="ico" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="3" y="3" width="18" height="4" rx="1.2"/><rect x="3" y="9" width="8" height="6" rx="1.2"/><rect x="13" y="9" width="8" height="6" rx="1.2"/><rect x="3" y="17" width="18" height="4" rx="1.2"/></svg>
                 </span>
                 Taskboards
             </a>
