@@ -2318,7 +2318,8 @@ function applyTheme(theme, animate=true) {
   q('#theme-icon').textContent = theme==='dark' ? '☽' : '☀\uFE0E';   // FE0E: always the plain text glyph, never the colour emoji
   localStorage.setItem(LS_THEME, theme);
   const mc=document.querySelector('meta[name="theme-color"]');
-  if(mc) mc.setAttribute('content', theme==='dark'?'#0e0e16':'#f3f0e8');
+  // browser chrome follows the theme's own background, so light and dark stay consistent
+  if(mc) mc.setAttribute('content', getComputedStyle(document.documentElement).getPropertyValue('--f-bg1').trim() || (theme==='dark' ? '#141414' : '#ffffff'));
 }
 q('#theme-btn').addEventListener('click', ()=>{
   const cur=document.documentElement.getAttribute('data-theme');
