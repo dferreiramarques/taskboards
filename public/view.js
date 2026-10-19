@@ -24,7 +24,7 @@
   // ── theme (same preference as the app) ─────────────────────────────────────
   function applyTheme(theme) {
     document.documentElement.setAttribute('data-theme', theme);
-    q('#theme-icon').textContent = theme === 'dark' ? '☽' : '☀';
+    q('#theme-icon').textContent = theme === 'dark' ? '☽' : '☀\uFE0E';
     try { localStorage.setItem(LS_THEME, theme); } catch {}
   }
   let savedTheme = 'dark';

@@ -1315,7 +1315,7 @@ function renderShareModal(state = {}) {
   const board = shareBoard();
   if (!board) { closeShareModal(); return; }
   const body = q('#share-body');
-  q('#share-title').textContent = board.share ? '🚀 PUBLIC BOARD' : '🔒 PRIVATE BOARD';
+  q('#share-title').innerHTML = board.share ? `${ICON_ROCKET} PUBLIC BOARD` : `${ICON_LOCK} PRIVATE BOARD`;
 
   if (state.busy) { body.innerHTML = `<p class="share__text">${esc(state.busy)}</p>`; return; }
 
@@ -1541,7 +1541,7 @@ function moveOrReorderCard(id, newStatus, insertBeforeId) {
   renderBoard();
   if (newStatus === 'done' && wasStatus !== 'done') {
     setTimeout(launchConfetti, 80);
-    showToast(`"${cardTitle.slice(0, 25)}${cardTitle.length > 25 ? '...' : ''}" completed! 🎉`, 'success');
+    showToast(`"${cardTitle.slice(0, 25)}${cardTitle.length > 25 ? '...' : ''}" completed!`, 'success');
   }
 }
 
@@ -1606,7 +1606,7 @@ function computeTabsPerPage() {
     const t = document.createElement('div');
     t.className = 'board-tab';
     t.style.cssText = 'flex-shrink:0;white-space:nowrap;';
-    t.innerHTML = `<button class="board-tab__share" style="pointer-events:none">🔒</button><span class="board-tab__name">${esc(board.name)}</span>${boards.length > 1 ? '<button class="board-tab__delete" style="pointer-events:none">✕</button>' : ''}`;
+    t.innerHTML = `<button class="board-tab__share" style="pointer-events:none">${ICON_LOCK}</button><span class="board-tab__name">${esc(board.name)}</span>${boards.length > 1 ? '<button class="board-tab__delete" style="pointer-events:none">✕</button>' : ''}`;
     probe.appendChild(t);
     totalW += t.getBoundingClientRect().width + 4;
     if (totalW <= availW) count++;
@@ -1638,7 +1638,7 @@ function renderTabs() {
     tab.style.setProperty('--tab-color', boardColor(board));
     if (tabDrag?.active && tabDrag.id === board.id) tab.classList.add('dragging-source');
     tab.innerHTML = `
-      <button class="board-tab__share" title="${board.share ? 'Public (read-only) — click for share details' : 'Private — click to share'}" aria-label="${board.share ? 'Public board — share details' : 'Private board — share'}">${board.share ? '🚀' : '🔒'}</button>
+      <button class="board-tab__share" title="${board.share ? 'Public (read-only) — click for share details' : 'Private — click to share'}" aria-label="${board.share ? 'Public board — share details' : 'Private board — share'}">${board.share ? ICON_ROCKET : ICON_LOCK}</button>
       <span class="board-tab__name">${esc(board.name)}</span>
       ${boards.length > 1 ? `<button class="board-tab__delete" title="Delete board">✕</button>` : ''}
     `;
@@ -1977,6 +1977,10 @@ function renderZone(containerId, zoneCards, compact) {
   zoneCards.forEach(card => c.appendChild(buildCardEl(card, compact)));
 }
 
+// Single-colour line icons (they follow the text colour) instead of colour emoji
+const ICON_LOCK   = `<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>`;
+const ICON_ROCKET = `<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2c3 2.5 4.5 6 4.5 9.5V16l2 3h-4L12 22l-2.5-3h-4l2-3v-4.5C7.5 8 9 4.5 12 2z"/><circle cx="12" cy="10" r="1.6"/></svg>`;
+
 // Shown at the right of a card once it is red (double-click / right-click)
 const ACTIONS_MARKUP = `<div class="card__actions" tabindex="-1">
         <button type="button" class="card__edit-btn" title="Edit card" aria-label="Edit card"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button>
@@ -2311,7 +2315,7 @@ function initTheme() {
 }
 function applyTheme(theme, animate=true) {
   document.documentElement.setAttribute('data-theme', theme);
-  q('#theme-icon').textContent = theme==='dark' ? '☽' : '☀';
+  q('#theme-icon').textContent = theme==='dark' ? '☽' : '☀\uFE0E';   // FE0E: always the plain text glyph, never the colour emoji
   localStorage.setItem(LS_THEME, theme);
   const mc=document.querySelector('meta[name="theme-color"]');
   if(mc) mc.setAttribute('content', theme==='dark'?'#0e0e16':'#f3f0e8');
