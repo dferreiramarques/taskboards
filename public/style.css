@@ -25,6 +25,7 @@
   --f-brand:      #0078d4;
   --f-brand-h:    #106ebe;
   --f-brand-a:    #005a9e;
+  --f-brand-ink:  #ffffff;
   --f-brand-bg:   rgba(0,120,212,.12);
   --f-brand-bg2:  rgba(0,120,212,.08);
   --f-hover:      rgba(0,0,0,.04);
@@ -45,6 +46,7 @@
   --f-archive:    #0078d4;
   --f-archive-bg: rgba(0,120,212,.06);
   /* Shadows (elevation) */
+  --f-shadow-c:   rgba(0,0,0,.10);   /* colour of the header's 0 1px 2px shadow; geometry is fixed where it is used */
   --f-shadow2:    0 1px 2px rgba(0,0,0,.06);
   --f-shadow4:    0 1px 3px rgba(0,0,0,.08);
   --f-shadow8:    0 4px 8px rgba(0,0,0,.14),0 0 2px rgba(0,0,0,.12);
@@ -129,6 +131,7 @@
   --f-done-bg:    rgba(200,169,244,.08);
   --f-archive:    #479ef5;
   --f-archive-bg: rgba(71,158,245,.06);
+  --f-shadow-c:   rgba(0,0,0,.55);
   --f-shadow2:    0 1px 2px rgba(0,0,0,.4),0 0 2px rgba(0,0,0,.3);
   --f-shadow4:    0 2px 4px rgba(0,0,0,.4),0 0 2px rgba(0,0,0,.3);
   --f-shadow8:    0 4px 8px rgba(0,0,0,.4),0 0 2px rgba(0,0,0,.3);
@@ -188,14 +191,14 @@ body {
 }
 
 /* ══════════════════════════════════════════════════════
-   TOPBAR
+   TOPBAR — same layout as the Roadmaps app: brand · board tabs · sync · theme · account
    ══════════════════════════════════════════════════════ */
 .topbar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 0 16px;
-  height: 48px;
+  gap: 16px;
+  min-height: 64px;
+  padding: 10px 24px;
   flex-shrink: 0;
   background: var(--f-bg1);
   border-bottom: 1px solid var(--f-stroke2);
@@ -203,54 +206,50 @@ body {
   position: relative;
 }
 
-/* Subtle Mica-inspired gradient overlay */
-.topbar::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(90deg, var(--f-brand-bg) 0%, transparent 40%);
-  pointer-events: none;
-  opacity: .5;
-}
-
 .topbar__brand {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   flex-shrink: 0;
-  position: relative;
-  z-index: 1;
+  text-decoration: none;
+  color: var(--f-fg1);
 }
 
 .topbar__logo {
-  color: var(--f-brand);
-  font-size: 18px;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--f-r8);
+  display: grid;
+  place-items: center;
+  background: var(--f-brand);
+  color: var(--f-brand-ink);
+  box-shadow: 0 1px 2px var(--f-shadow-c);
 }
+.topbar__logo .ico { width: 18px; height: 18px; vertical-align: baseline; }
 
 .topbar__name {
-  font-size: 14px;
-  font-weight: 600;
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: -.01em;
   color: var(--f-fg1);
-  letter-spacing: .01em;
 }
 
 .topbar__actions {
   display: flex;
   align-items: center;
-  gap: 6px;
-  position: relative;
-  z-index: 1;
+  gap: 8px;
+  flex-shrink: 0;
 }
 
-.topbar__login { display: flex; align-items: center; margin-left: 4px; }
+.topbar__login { display: flex; align-items: center; }
 
 .topbar__btn {
-  width: 32px;
-  height: 32px;
-  border-radius: var(--f-r4);
+  width: 36px;
+  height: 36px;
+  border-radius: var(--f-r6);
   border: 1px solid transparent;
   background: transparent;
-  color: var(--f-fg3);
+  color: var(--f-fg1);
   cursor: pointer;
   font-size: 14px;
   font-weight: 500;
@@ -259,12 +258,26 @@ body {
   justify-content: center;
   transition: background var(--f-fast) var(--f-ease), color var(--f-fast) var(--f-ease), border-color var(--f-fast) var(--f-ease);
 }
+.topbar__btn .ico { width: 16px; height: 16px; vertical-align: baseline; }
 
 .topbar__btn:hover {
-  background: var(--f-bg3);
+  background: var(--f-bg2);
   color: var(--f-fg1);
-  border-color: var(--f-stroke1);
 }
+
+/* status chip (same as Roadmaps) */
+.chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 3px 10px; border-radius: var(--f-rpill);
+  font-size: 12px; font-weight: 600; white-space: nowrap;
+  background: var(--f-warning-bg); color: var(--f-warning);
+}
+.chip::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.chip--ok { background: var(--f-success-bg); color: var(--f-success); }
+.chip--info { background: var(--f-brand-bg); color: var(--f-brand); }
+.chip--danger { background: var(--f-danger-bg); color: var(--f-danger); }
+.chip--muted { background: var(--f-bg3); color: var(--f-fg3); }
+.chip[hidden] { display: none; }
 
 /* ══════════════════════════════════════════════════════
    BOARDS BAR
@@ -273,12 +286,8 @@ body {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 0 12px;
-  height: 44px;
-  flex-shrink: 0;
-  background: var(--f-bg1);
-  border-bottom: 1px solid var(--f-stroke2);
-  z-index: 25;
+  flex: 1 1 0;
+  min-width: 0;
   position: relative;
   overflow: hidden;
 }
@@ -287,23 +296,24 @@ body {
   display: flex;
   align-items: center;
   gap: 4px;
-  flex: 1;
+  flex: 0 1 auto;
+  min-width: 0;
   overflow: hidden;
-  height: 100%;
+  padding: 2px;
 }
 
 .board-tab {
   display: flex;
   align-items: center;
   gap: 5px;
-  padding: 5px 12px;
-  height: 30px;
-  border-radius: var(--f-r4);
+  padding: 0 12px;
+  height: 32px;
+  border-radius: var(--f-r8);
   border: 1px solid var(--f-stroke1);
   background: var(--f-bg2);
   color: var(--f-fg3);
-  font-size: .75rem;
-  font-weight: 400;
+  font-size: 13px;
+  font-weight: 500;
   cursor: pointer;
   white-space: nowrap;
   flex-shrink: 0;
@@ -370,11 +380,11 @@ body.tab-dragging, body.tab-dragging * { cursor: grabbing !important; }
 }
 
 .board-tab.active {
-  background: var(--f-bg1);
+  background: color-mix(in srgb, var(--tab-color, var(--f-brand)) 12%, var(--f-bg1));
   border-color: var(--tab-color, var(--f-brand));
   color: var(--tab-color, var(--f-brand));
   font-weight: 600;
-  box-shadow: var(--f-shadow2);
+  box-shadow: 0 1px 2px var(--f-shadow-c);
 }
 
 .board-tab__name {
@@ -435,9 +445,9 @@ body.tab-dragging, body.tab-dragging * { cursor: grabbing !important; }
 .board-tab__delete:hover { background: var(--f-danger-bg); color: var(--f-danger); }
 
 .tab-nav {
-  width: 28px;
-  height: 28px;
-  border-radius: var(--f-r4);
+  width: 32px;
+  height: 32px;
+  border-radius: var(--f-r8);
   border: 1px solid var(--f-stroke1);
   background: var(--f-bg2);
   color: var(--f-fg3);
@@ -454,9 +464,9 @@ body.tab-dragging, body.tab-dragging * { cursor: grabbing !important; }
 .tab-nav:disabled { opacity: .4; cursor: default; }
 
 .tab-add {
-  width: 28px;
-  height: 28px;
-  border-radius: var(--f-r4);
+  width: 32px;
+  height: 32px;
+  border-radius: var(--f-r8);
   border: 1px dashed var(--f-stroke1);
   background: transparent;
   color: var(--f-fg4);
@@ -1248,21 +1258,23 @@ kbd {
 
 .user-pill {
   position: relative;
-  display: flex; align-items: center; gap: 6px;
-  padding: 3px 8px 3px 3px;
+  display: flex; align-items: center;
+  height: 36px;
+  padding: 0 10px 0 4px;
+  gap: 8px;
   border-radius: var(--f-rpill);
-  border: 1px solid var(--f-stroke1);
-  background: var(--f-bg2);
+  border: 1px solid var(--f-stroke2);
+  background: var(--f-bg1);
   cursor: pointer;
   transition: background var(--f-fast), border-color var(--f-fast);
 }
 .user-pill.hidden { display: none !important; }
-.user-pill:hover { background: var(--f-bg3); }
+.user-pill:hover { background: var(--f-bg2); }
 
-.user-pill__avatar { width: 24px; height: 24px; border-radius: 50%; object-fit: cover; }
+.user-pill__avatar { width: 28px; height: 28px; border-radius: 50%; object-fit: cover; background: var(--f-bg3); }
 .user-pill__name {
-  font-size: .75rem; font-weight: 500; color: var(--f-fg1);
-  max-width: 100px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: 14px; font-weight: 500; color: var(--f-fg1);
+  max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 
 .user-pill__menu {
@@ -1418,4 +1430,11 @@ kbd {
 .topbar__btn--install:hover {
   background: var(--f-brand) !important;
   color: #fff !important;
+}
+
+/* phones: the top bar keeps the logo, the board tabs and the account */
+@media (max-width: 700px) {
+  .topbar { gap: 8px; padding: 8px 12px; flex-wrap: nowrap; }
+  .topbar__name, #sync-chip, #help-btn, .user-pill__name { display: none; }
+  .user-pill { padding: 0 4px; }
 }
