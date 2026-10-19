@@ -1,5 +1,5 @@
-const CACHE_NAME = 'taskboards-v35';
-const ASSETS = ['/', './index.html', './app.html', './style.css', './app.js', './manifest.json', './config.js', './share-core.js', './view.html', './view.js', './view.css'];
+const CACHE_NAME = 'taskboards-v36';
+const ASSETS = ['/', './index.html', './app.html', './style.css', './app.js', './manifest.json', './config.js', './roadmap-embed.js', './share-core.js', './view.html', './view.js', './view.css'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(ASSETS)));

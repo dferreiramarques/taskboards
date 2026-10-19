@@ -115,6 +115,26 @@ Each board has a lock in its tab: **🔒 private** (default) or **🚀 public**.
 
 ---
 
+## Roadmap for all your apps
+
+One page to plan it, one widget to show it.
+
+- **`roadmap.html`** is the editor: vertical **Now / Next / Later** columns, one set per product (switch with the tabs at the top, **+** adds a product). Add, edit and delete features (title, description, a coloured tag), drag cards between columns or use the ‹ › buttons (keyboard: **Alt + arrows**). Everything is saved in your browser while you work.
+- **`roadmap.json`** is the published data (all products). When you are happy, click **Export**, replace `roadmap.json` (in the repo root **and** in `public/`) with the downloaded file and push. The editor shows **Unpublished changes** until the published file matches; **Discard changes** goes back to it.
+- **`roadmap-embed.js`** shows a product on any page, in an isolated widget that follows the page's light/dark theme:
+
+  ```html
+  <div data-roadmap="taskboards"></div>
+  <script src="https://taskboards.monco.io/roadmap-embed.js" defer></script>
+  ```
+
+  `data-roadmap` is the product id (the `id` in `roadmap.json`; the editor also shows it in the address bar as `?app=…`). Optional: `data-src` to read a different file, `data-theme="light|dark"` to force a theme. The Taskboards landing page uses it.
+- **Read-only link:** `roadmap.html?view=1&app=taskboards` shows the published roadmap with no editing controls.
+
+> The roadmap is public. Don't put anything in it you don't want visitors to read. Only people who can push to the repository can change what is published.
+
+---
+
 ## Stay signed in: the session server (optional)
 
 Google’s browser-only sign-in only gives 1-hour tokens, so without this the app re-asks Google about once an hour (and some browsers block that pop-up). `auth.js` fixes it with Google’s *authorization code* flow: it keeps a **refresh token** in an encrypted, `httpOnly` cookie in the user’s own browser and swaps it for a fresh access token whenever the app needs one.
@@ -182,6 +202,9 @@ taskboards/
 │   ├── sw.js           # Service worker — cache versioning, offline support
 │   ├── manifest.json   # PWA manifest — icons, display mode, theme colour
 │   ├── share-core.js   # Passphrase + AES-GCM encryption for shared boards
+│   ├── roadmap.html/.js/.css  # Roadmap editor (Now / Next / Later)
+│   ├── roadmap.json    # Published roadmap data (all products)
+│   ├── roadmap-embed.js  # Widget that shows a roadmap on any product page
 │   ├── view.html/.js/.css  # Read-only viewer for a shared board
 │   └── config.js       # Google Client ID (not secret, safe to commit)
 ├── auth.js             # Optional session server: refresh-token cookie, /auth/*
