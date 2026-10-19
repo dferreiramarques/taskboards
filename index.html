@@ -14,258 +14,39 @@
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'><rect fill='%230a0a0a' width='192' height='192'/><text x='96' y='132' font-family='Consolas, monospace' font-size='130' font-weight='bold' fill='%230078d4' text-anchor='middle'>%E2%97%88</text></svg>">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Figtree:ital,wght@0,300..900;1,300..900&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <title>Taskboards — Kanban Built for Speed</title>
+    <link rel="stylesheet" href="./product-page.css">
     <style>
+        /* Taskboards accent. Colours only: every size, space and radius comes from product-page.css (shared with Roadmaps and Diagramico). */
+        [data-theme="light"] {
+            --primary: #0078d4; --primary-h: #106ebe; --primary-ink: #ffffff;
+            --primary-soft: rgba(0, 120, 212, .14); --glow: rgba(0, 120, 212, .10);
+            --z-todo: #0078d4; --z-inprog: #ca5010; --z-done: #7160e8;
+        }
+        [data-theme="dark"] {
+            --primary: #479ef5; --primary-h: #62abf5; --primary-ink: #0e0e16;
+            --primary-soft: rgba(71, 158, 245, .16); --glow: rgba(71, 158, 245, .12);
+            --z-todo: #479ef5; --z-inprog: #ffa15c; --z-done: #a695f5;
+        }
         :root {
-            --bg1: #ffffff;
-            --bg2: #f5f5f5;
-            --bg3: #ebebeb;
-            --bg4: #e0e0e0;
-            --fg1: #242424;
-            --fg2: #424242;
-            --fg3: #616161;
-            --fg4: #898989;
-            --stroke1: #d1d1d1;
-            --stroke2: #e0e0e0;
-            --brand: #0078d4;
-            --brand-h: #106ebe;
-            --brand-fg: #ffffff;
-            --brand-bg: rgba(0, 120, 212, .08);
-            --z-todo: #0078d4;
-            --z-inprog: #ca5010;
-            --z-done: #7160e8;
-            --shadow: 0 12px 32px rgba(20, 20, 30, .08);
-            color-scheme: light;
+            /* names used by the page-specific components below */
+            --bg1: var(--surface); --bg2: var(--surface-2);
+            --stroke1: var(--border-strong); --stroke2: var(--border);
+            --fg1: var(--text); --fg2: var(--text); --fg3: var(--muted); --fg4: var(--subtle);
+            --brand: var(--primary); --brand-h: var(--primary-h); --brand-fg: var(--primary-ink); --brand-bg: var(--primary-soft);
+            --shadow: 0 12px 32px var(--shadow-c);
         }
-
-        @media (prefers-color-scheme: dark) {
-            :root:not([data-theme="light"]) {
-                --bg1: #141414;
-                --bg2: #1f1f1f;
-                --bg3: #292929;
-                --bg4: #333333;
-                --fg1: #ffffff;
-                --fg2: #d6d6d6;
-                --fg3: #adadad;
-                --fg4: #707070;
-                --stroke1: #404040;
-                --stroke2: #2e2e2e;
-                --brand: #479ef5;
-                --brand-h: #62abf5;
-                --brand-fg: #0e0e16;
-                --brand-bg: rgba(71, 158, 245, .12);
-                --z-todo: #479ef5;
-                --z-inprog: #ffa15c;
-                --z-done: #a695f5;
-                --shadow: 0 12px 32px rgba(0, 0, 0, .45);
-                color-scheme: dark;
-            }
-        }
-
-        :root[data-theme="dark"] {
-            --bg1: #141414;
-            --bg2: #1f1f1f;
-            --bg3: #292929;
-            --bg4: #333333;
-            --fg1: #ffffff;
-            --fg2: #d6d6d6;
-            --fg3: #adadad;
-            --fg4: #707070;
-            --stroke1: #404040;
-            --stroke2: #2e2e2e;
-            --brand: #479ef5;
-            --brand-h: #62abf5;
-            --brand-fg: #0e0e16;
-            --brand-bg: rgba(71, 158, 245, .12);
-            --z-todo: #479ef5;
-            --z-inprog: #ffa15c;
-            --z-done: #a695f5;
-            --shadow: 0 12px 32px rgba(0, 0, 0, .45);
-            color-scheme: dark;
-        }
-
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-
         html { scroll-behavior: smooth; }
-
-        @media (prefers-reduced-motion: reduce) {
-            html { scroll-behavior: auto; }
-            * { animation-duration: .001ms !important; transition-duration: .001ms !important; }
-        }
-
-        body {
-            background: var(--bg1);
-            color: var(--fg1);
-            font-family: 'Figtree', system-ui, -apple-system, 'Segoe UI', sans-serif;
-            line-height: 1.5;
-            -webkit-font-smoothing: antialiased;
-        }
-
-        .mono { font-family: 'JetBrains Mono', 'Courier New', monospace; }
-
-        .wrap { max-width: 1120px; margin: 0 auto; padding: 0 32px; }
-
+        @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+        [hidden] { display: none !important; }
+        .mono { font-family: var(--mono); }
         a { color: inherit; }
-
-        img, svg { display: block; max-width: 100%; }
-
-        /* ===== Header ===== */
-
-        header {
-            position: sticky;
-            top: 0;
-            z-index: 20;
-            background: color-mix(in srgb, var(--bg1) 88%, transparent);
-            backdrop-filter: blur(10px);
-            border-bottom: 1px solid var(--stroke2);
-        }
-
-        .header-inner {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            height: 64px;
-        }
-
-        .brand {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            font-weight: 700;
-            font-size: 1.05rem;
-            letter-spacing: -0.01em;
-            text-decoration: none;
-        }
-
-        .brand-mark {
-            width: 30px;
-            height: 30px;
-            border-radius: 7px;
-            background: #0a0a0a;
-            color: var(--brand);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-family: 'JetBrains Mono', monospace;
-            font-weight: 700;
-            font-size: 16px;
-            flex-shrink: 0;
-        }
-
-        nav { display: flex; align-items: center; gap: 28px; }
-
-        nav a:not(.btn) {
-            font-size: .9rem;
-            color: var(--fg3);
-            text-decoration: none;
-            transition: color .15s ease;
-        }
-
-        nav a:not(.btn):hover { color: var(--fg1); }
-
-        .nav-links { display: flex; gap: 24px; }
-
-        @media (max-width: 780px) { .nav-links { display: none; } }
-
-        .theme-toggle {
-            width: 36px;
-            height: 36px;
-            border-radius: 8px;
-            border: 1px solid var(--stroke1);
-            background: var(--bg2);
-            color: var(--fg2);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            cursor: pointer;
-        }
-
-        .theme-toggle:hover { border-color: var(--brand); color: var(--brand); }
-        .theme-toggle svg { width: 16px; height: 16px; }
-
-        /* ===== Buttons ===== */
-
-        .btn {
-            display: inline-flex;
-            align-items: center;
-            gap: 9px;
-            padding: 12px 20px;
-            border-radius: 9px;
-            font-weight: 600;
-            font-size: .92rem;
-            text-decoration: none;
-            border: 1px solid transparent;
-            cursor: pointer;
-            white-space: nowrap;
-        }
-
-        .btn svg { width: 17px; height: 17px; flex-shrink: 0; }
-
-        .btn-primary { background: var(--brand); color: var(--brand-fg); }
-        .btn-primary:hover { background: var(--brand-h); }
-
-        .btn-ghost {
-            background: transparent;
-            border-color: var(--stroke1);
-            color: var(--fg1);
-        }
-        .btn-ghost:hover { border-color: var(--brand); color: var(--brand); }
-
-        .btn-sm { padding: 8px 14px; font-size: .82rem; border-radius: 7px; }
-
-        /* ===== Hero ===== */
-
-        .hero { padding: 88px 0 64px; position: relative; overflow: hidden; }
-
-        .eyebrow {
-            font-family: 'JetBrains Mono', monospace;
-            font-size: .74rem;
-            font-weight: 600;
-            letter-spacing: .12em;
-            text-transform: uppercase;
-            color: var(--brand);
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            margin-bottom: 20px;
-        }
-
-        .eyebrow::before {
-            content: "";
-            width: 6px;
-            height: 6px;
-            border-radius: 50%;
-            background: var(--brand);
-        }
-
-        h1 {
-            font-size: clamp(2.4rem, 5.4vw, 4rem);
-            font-weight: 800;
-            letter-spacing: -0.03em;
-            line-height: 1.04;
-            max-width: 16ch;
-            text-wrap: balance;
-        }
-
-        h1 em { font-style: normal; color: var(--brand); }
-
-        .hero-sub {
-            margin-top: 22px;
-            font-size: 1.15rem;
-            color: var(--fg3);
-            max-width: 58ch;
-            text-wrap: pretty;
-        }
-
-        .hero-cta { margin-top: 34px; display: flex; flex-wrap: wrap; gap: 14px; align-items: center; }
-
-        .hero-meta {
-            margin-top: 14px;
-            font-size: .82rem;
-            color: var(--fg4);
-            font-family: 'JetBrains Mono', monospace;
-        }
+        img, svg { max-width: 100%; }
+        .btn { text-decoration: none; }
+        .btn svg { width: 17px; height: 17px; }
+        .band { background: var(--surface-2); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+        .lp-sec.band + .lp-sec { border-top: 0; }
 
         /* ===== Board visual ===== */
 
@@ -295,77 +76,6 @@
         .dot-row { display: flex; gap: 6px; }
         .dot-row span { width: 7px; height: 7px; border-radius: 50%; background: var(--stroke1); }
 
-        /* ===== Sections ===== */
-
-        section { padding: 76px 0; }
-        section.tight { padding: 56px 0; }
-
-        .section-head { max-width: 60ch; margin-bottom: 44px; }
-        .section-head .eyebrow { margin-bottom: 14px; }
-
-        h2 {
-            font-size: clamp(1.7rem, 3vw, 2.3rem);
-            font-weight: 700;
-            letter-spacing: -0.02em;
-            text-wrap: balance;
-        }
-
-        .section-head p { margin-top: 12px; color: var(--fg3); font-size: 1.02rem; }
-
-        .divider { border-top: 1px solid var(--stroke2); }
-
-        /* ===== Feature grid ===== */
-
-        .feature-grid {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 1px;
-            background: var(--stroke2);
-            border: 1px solid var(--stroke2);
-            border-radius: 14px;
-            overflow: hidden;
-        }
-
-        @media (max-width: 860px) { .feature-grid { grid-template-columns: repeat(2, 1fr); } }
-        @media (max-width: 560px) { .feature-grid { grid-template-columns: 1fr; } }
-
-        .feature-card {
-            background: var(--bg1);
-            padding: 26px 24px;
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-        }
-
-        .feature-index {
-            font-family: 'JetBrains Mono', monospace;
-            font-size: .72rem;
-            color: var(--brand);
-            font-weight: 600;
-        }
-
-        .feature-card h3 { font-size: 1.02rem; font-weight: 700; letter-spacing: -0.01em; }
-        .feature-card p { color: var(--fg3); font-size: .88rem; line-height: 1.55; }
-
-        /* ===== Modes ===== */
-
-        .mode-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
-
-        @media (max-width: 720px) { .mode-grid { grid-template-columns: 1fr; } }
-
-        .mode-card { border: 1px solid var(--stroke1); border-radius: 14px; padding: 28px; background: var(--bg2); }
-
-        .mode-card .mono {
-            font-size: .72rem;
-            letter-spacing: .1em;
-            text-transform: uppercase;
-            color: var(--fg4);
-            font-weight: 600;
-        }
-
-        .mode-card h3 { margin-top: 8px; font-size: 1.2rem; font-weight: 700; }
-        .mode-card p { margin-top: 10px; color: var(--fg3); font-size: .92rem; }
-
         /* ===== Sync chain ===== */
 
         .chain { display: flex; align-items: stretch; gap: 0; overflow-x: auto; padding-bottom: 8px; }
@@ -387,69 +97,6 @@
 
         .chain-arrow { flex: 0 0 auto; display: flex; align-items: center; padding: 0 4px; color: var(--fg4); z-index: 1; }
         .chain-arrow svg { width: 14px; height: 14px; }
-
-        /* ===== Get started section ===== */
-
-        .download-grid { display: grid; grid-template-columns: 1.1fr 1fr; gap: 20px; align-items: stretch; }
-        .download-grid--single { grid-template-columns: 1fr; max-width: 460px; margin: 0 auto; }
-
-        @media (max-width: 820px) { .download-grid { grid-template-columns: 1fr; } }
-
-        .download-card { border-radius: 16px; padding: 34px; display: flex; flex-direction: column; gap: 16px; }
-
-        .download-card.primary {
-            background: linear-gradient(155deg, var(--brand) 0%, var(--brand-h) 100%);
-            color: #ffffff;
-        }
-
-        .download-card.secondary { border: 1px solid var(--stroke1); background: var(--bg2); }
-
-        .download-card .platform-icon { width: 40px; height: 40px; }
-
-        .download-card h3 { font-size: 1.3rem; font-weight: 700; letter-spacing: -0.01em; }
-
-        .download-card.primary p { color: rgba(255,255,255,.85); font-size: .92rem; }
-        .download-card.secondary p { color: var(--fg3); font-size: .92rem; }
-
-        .download-card.primary .btn-primary { background: #ffffff; color: var(--brand-h); }
-        .download-card.primary .btn-primary:hover { background: #f0f6ff; }
-
-        .file-meta {
-            margin-top: auto;
-            padding-top: 14px;
-            border-top: 1px solid rgba(255,255,255,.22);
-            font-family: 'JetBrains Mono', monospace;
-            font-size: .76rem;
-            display: flex;
-            gap: 16px;
-            flex-wrap: wrap;
-        }
-
-        .download-card.secondary .file-meta { border-top-color: var(--stroke2); color: var(--fg4); }
-        .download-card.primary .file-meta { color: rgba(255,255,255,.75); }
-
-        .checklist { list-style: none; display: flex; flex-direction: column; gap: 8px; margin-top: 2px; }
-        .checklist li { display: flex; gap: 9px; font-size: .88rem; color: var(--fg2); align-items: flex-start; }
-        .checklist svg { width: 15px; height: 15px; flex-shrink: 0; margin-top: 2px; color: var(--brand); }
-
-        /* ===== Footer ===== */
-
-        footer { border-top: 1px solid var(--stroke2); padding: 40px 0; }
-
-        .footer-inner {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            flex-wrap: wrap;
-            gap: 16px;
-            font-size: .85rem;
-            color: var(--fg4);
-        }
-
-        .footer-inner a { text-decoration: none; color: var(--fg3); }
-        .footer-inner a:hover { color: var(--brand); }
-
-        .footer-links { display: flex; gap: 20px; flex-wrap: wrap; }
 
         /* ===== Plans & waitlist ===== */
 
@@ -539,177 +186,144 @@
 </head>
 <body>
 
-    <header>
-        <div class="wrap header-inner">
+    <header class="topbar">
+        <div class="wrap topbar__in">
             <a class="brand" href="#top">
-                <span class="brand-mark">◈</span>
+                <span class="brand__mark" aria-hidden="true">
+                    <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="5" height="16" rx="1.5"/><rect x="10" y="4" width="5" height="10" rx="1.5"/><rect x="17" y="4" width="4" height="13" rx="1.5"/></svg>
+                </span>
                 Taskboards
             </a>
-            <nav>
-                <div class="nav-links">
-                    <a href="#features">Features</a>
-                    <a href="#privacy">Privacy</a>
-                    <a href="#sync">Sync</a>
-                    <a href="#plans">Plans</a>
-                    <a href="#roadmap">Roadmap</a>
-                    <a href="#start">Get started</a>
-                    <a href="https://github.com/dferreiramarques/taskboards" target="_blank" rel="noopener">GitHub</a>
-                </div>
-                <button class="theme-toggle" id="themeToggle" aria-label="Toggle color theme" title="Toggle theme">
-                    <svg id="themeIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></svg>
-                </button>
+            <nav class="nav" aria-label="Sections">
+                <a href="#features">Features</a>
+                <a href="#privacy">Privacy</a>
+                <a href="#sync">Sync</a>
+                <a href="#plans">Plans</a>
+                <a href="#roadmap">Roadmap</a>
+                <a href="https://github.com/dferreiramarques/taskboards" target="_blank" rel="noopener">GitHub</a>
             </nav>
+            <span class="grow"></span>
+            <button class="btn btn--text btn--icon" id="themeToggle" aria-label="Toggle light / dark theme" title="Toggle theme">
+                <svg class="ico" id="themeIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"></svg>
+            </button>
+            <a class="btn btn--primary" href="app.html">Open the app</a>
         </div>
     </header>
 
     <main id="top">
-        <section class="hero">
-            <div class="wrap">
-                <div class="eyebrow mono">Free &middot; Google Sign-In &middot; No Setup</div>
-                <h1>A kanban board built for <em>speed</em>, not busywork.</h1>
-                <p class="hero-sub">
-                    Taskboards is a fast Kanban board designed to keep work moving, not to manage itself.
-                    Archive, To&nbsp;Do, In&nbsp;Progress, Done — drag cards between zones, track owners and
-                    due dates, and stay focused on the task instead of the tool.
-                </p>
-                <div class="hero-cta">
-                    <a class="btn btn-primary" href="app.html">
-                        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                            <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
-                            <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
-                            <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05"/>
-                            <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
-                        </svg>
-                        Continue with Google
-                    </a>
-                    <a class="btn btn-ghost" href="#privacy">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/></svg>
-                        Where's my data?
-                    </a>
-                </div>
-                <div class="hero-meta">No server, no database &middot; every board lives only in your own Google Drive</div>
-
-                <div class="board-visual" aria-hidden="true">
-                    <svg viewBox="0 0 900 250" preserveAspectRatio="xMidYMid meet">
-                        <!-- TO DO -->
-                        <circle cx="18" cy="12" r="4" fill="var(--z-todo)"/>
-                        <text x="30" y="16" font-family="JetBrains Mono, monospace" font-size="12" font-weight="700" fill="var(--fg2)" letter-spacing="1">TO DO</text>
-                        <rect x="0" y="32" width="280" height="58" rx="9" fill="var(--bg1)" stroke="var(--stroke1)"/>
-                        <rect x="14" y="46" width="4" height="30" rx="2" fill="var(--z-todo)"/>
-                        <rect x="28" y="48" width="150" height="9" rx="4" fill="var(--stroke1)"/>
-                        <circle cx="252" cy="66" r="11" fill="var(--brand-bg)" stroke="var(--stroke1)"/>
-                        <rect x="28" y="66" width="90" height="7" rx="3.5" fill="var(--stroke2)"/>
-                        <rect x="0" y="100" width="280" height="58" rx="9" fill="var(--bg1)" stroke="var(--stroke1)"/>
-                        <rect x="14" y="114" width="4" height="30" rx="2" fill="var(--z-todo)"/>
-                        <rect x="28" y="116" width="110" height="9" rx="4" fill="var(--stroke1)"/>
-                        <circle cx="252" cy="134" r="11" fill="var(--brand-bg)" stroke="var(--stroke1)"/>
-                        <rect x="28" y="134" width="70" height="7" rx="3.5" fill="var(--stroke2)"/>
-
-                        <!-- IN PROGRESS -->
-                        <circle cx="328" cy="12" r="4" fill="var(--z-inprog)"/>
-                        <text x="340" y="16" font-family="JetBrains Mono, monospace" font-size="12" font-weight="700" fill="var(--fg2)" letter-spacing="1">IN PROGRESS</text>
-                        <rect x="310" y="32" width="280" height="58" rx="9" fill="var(--bg1)" stroke="var(--stroke1)"/>
-                        <rect x="324" y="46" width="4" height="30" rx="2" fill="var(--z-inprog)"/>
-                        <rect x="338" y="48" width="130" height="9" rx="4" fill="var(--stroke1)"/>
-                        <circle cx="562" cy="66" r="11" fill="var(--brand-bg)" stroke="var(--stroke1)"/>
-                        <rect x="338" y="66" width="80" height="7" rx="3.5" fill="var(--stroke2)"/>
-
-                        <!-- DONE -->
-                        <circle cx="638" cy="12" r="4" fill="var(--z-done)"/>
-                        <text x="650" y="16" font-family="JetBrains Mono, monospace" font-size="12" font-weight="700" fill="var(--fg2)" letter-spacing="1">DONE</text>
-                        <rect x="620" y="32" width="280" height="58" rx="9" fill="var(--bg1)" stroke="var(--stroke1)" opacity="0.75"/>
-                        <rect x="634" y="46" width="4" height="30" rx="2" fill="var(--z-done)"/>
-                        <rect x="648" y="48" width="120" height="9" rx="4" fill="var(--stroke1)"/>
-                        <path d="M858 62l6 6 12-13" stroke="var(--z-done)" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
-                        <rect x="620" y="100" width="280" height="58" rx="9" fill="var(--bg1)" stroke="var(--stroke1)" opacity="0.5"/>
-                        <rect x="634" y="114" width="4" height="30" rx="2" fill="var(--z-done)"/>
-                        <rect x="648" y="116" width="90" height="9" rx="4" fill="var(--stroke1)"/>
-                        <path d="M858 130l6 6 12-13" stroke="var(--z-done)" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
-
-                        <!-- drag hint arrow -->
-                        <path d="M294 60c8 0 8 0 14 0" stroke="var(--fg4)" stroke-width="2" stroke-dasharray="2 4" stroke-linecap="round"/>
-                        <path d="M604 60c8 0 8 0 14 0" stroke="var(--fg4)" stroke-width="2" stroke-dasharray="2 4" stroke-linecap="round"/>
+        <section class="wrap lp-hero">
+            <div class="eyebrow">Free &middot; Google sign-in &middot; No setup</div>
+            <h1>A kanban board built for <em>speed</em>, not busywork.</h1>
+            <p>Taskboards is a fast Kanban board designed to keep work moving, not to manage itself. Archive, To&nbsp;Do, In&nbsp;Progress, Done — drag cards between zones, track owners and due dates, and stay focused on the task instead of the tool.</p>
+            <div class="lp-cta">
+                <a class="btn btn--primary btn--lg" href="app.html">
+                    <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+                        <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+                        <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05"/>
+                        <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
                     </svg>
-                    <div class="board-visual-footer">
-                        <span>SPRINT 4 &middot; 3 CARDS &middot; YOUR DRIVE, YOUR DATA</span>
-                        <span class="dot-row"><span></span><span></span><span></span></span>
-                    </div>
-                </div>
+                    Continue with Google
+                </a>
+                <a class="btn btn--outline btn--lg" href="#privacy">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/></svg>
+                    Where's my data?
+                </a>
             </div>
+            <p class="lp-note">No server, no database — every board lives only in your own Google Drive.</p>
         </section>
 
-        <div class="wrap"><div class="divider"></div></div>
+        <div class="lp-demo">
+        <div class="board-visual" aria-hidden="true">
+            <svg viewBox="0 0 900 250" preserveAspectRatio="xMidYMid meet">
+                <!-- TO DO -->
+                <circle cx="18" cy="12" r="4" fill="var(--z-todo)"/>
+                <text x="30" y="16" font-family="JetBrains Mono, monospace" font-size="12" font-weight="700" fill="var(--fg2)" letter-spacing="1">TO DO</text>
+                <rect x="0" y="32" width="280" height="58" rx="9" fill="var(--bg1)" stroke="var(--stroke1)"/>
+                <rect x="14" y="46" width="4" height="30" rx="2" fill="var(--z-todo)"/>
+                <rect x="28" y="48" width="150" height="9" rx="4" fill="var(--stroke1)"/>
+                <circle cx="252" cy="66" r="11" fill="var(--brand-bg)" stroke="var(--stroke1)"/>
+                <rect x="28" y="66" width="90" height="7" rx="3.5" fill="var(--stroke2)"/>
+                <rect x="0" y="100" width="280" height="58" rx="9" fill="var(--bg1)" stroke="var(--stroke1)"/>
+                <rect x="14" y="114" width="4" height="30" rx="2" fill="var(--z-todo)"/>
+                <rect x="28" y="116" width="110" height="9" rx="4" fill="var(--stroke1)"/>
+                <circle cx="252" cy="134" r="11" fill="var(--brand-bg)" stroke="var(--stroke1)"/>
+                <rect x="28" y="134" width="70" height="7" rx="3.5" fill="var(--stroke2)"/>
 
-        <section id="features">
+                <!-- IN PROGRESS -->
+                <circle cx="328" cy="12" r="4" fill="var(--z-inprog)"/>
+                <text x="340" y="16" font-family="JetBrains Mono, monospace" font-size="12" font-weight="700" fill="var(--fg2)" letter-spacing="1">IN PROGRESS</text>
+                <rect x="310" y="32" width="280" height="58" rx="9" fill="var(--bg1)" stroke="var(--stroke1)"/>
+                <rect x="324" y="46" width="4" height="30" rx="2" fill="var(--z-inprog)"/>
+                <rect x="338" y="48" width="130" height="9" rx="4" fill="var(--stroke1)"/>
+                <circle cx="562" cy="66" r="11" fill="var(--brand-bg)" stroke="var(--stroke1)"/>
+                <rect x="338" y="66" width="80" height="7" rx="3.5" fill="var(--stroke2)"/>
+
+                <!-- DONE -->
+                <circle cx="638" cy="12" r="4" fill="var(--z-done)"/>
+                <text x="650" y="16" font-family="JetBrains Mono, monospace" font-size="12" font-weight="700" fill="var(--fg2)" letter-spacing="1">DONE</text>
+                <rect x="620" y="32" width="280" height="58" rx="9" fill="var(--bg1)" stroke="var(--stroke1)" opacity="0.75"/>
+                <rect x="634" y="46" width="4" height="30" rx="2" fill="var(--z-done)"/>
+                <rect x="648" y="48" width="120" height="9" rx="4" fill="var(--stroke1)"/>
+                <path d="M858 62l6 6 12-13" stroke="var(--z-done)" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+                <rect x="620" y="100" width="280" height="58" rx="9" fill="var(--bg1)" stroke="var(--stroke1)" opacity="0.5"/>
+                <rect x="634" y="114" width="4" height="30" rx="2" fill="var(--z-done)"/>
+                <rect x="648" y="116" width="90" height="9" rx="4" fill="var(--stroke1)"/>
+                <path d="M858 130l6 6 12-13" stroke="var(--z-done)" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+
+                <!-- drag hint arrow -->
+                <path d="M294 60c8 0 8 0 14 0" stroke="var(--fg4)" stroke-width="2" stroke-dasharray="2 4" stroke-linecap="round"/>
+                <path d="M604 60c8 0 8 0 14 0" stroke="var(--fg4)" stroke-width="2" stroke-dasharray="2 4" stroke-linecap="round"/>
+            </svg>
+            <div class="board-visual-footer">
+                <span>SPRINT 4 &middot; 3 CARDS &middot; YOUR DRIVE, YOUR DATA</span>
+                <span class="dot-row"><span></span><span></span><span></span></span>
+            </div>
+        </div>
+        </div>
+
+        <section class="lp-sec" id="features">
             <div class="wrap">
-                <div class="section-head">
-                    <div class="eyebrow mono">What it does</div>
+                <div class="lp-head">
+                    <div class="eyebrow">What it does</div>
                     <h2>Everything between "a pile of tasks" and a board that keeps up with you.</h2>
                     <p>Built to get out of your way — sign in once, then just drag cards.</p>
                 </div>
-                <div class="feature-grid">
-                    <div class="feature-card">
-                        <span class="feature-index mono">01</span>
-                        <h3>Multiple boards</h3>
-                        <p>Create as many boards as you need. Tabs auto-paginate when they overflow — double-click a tab to rename it.</p>
-                    </div>
-                    <div class="feature-card">
-                        <span class="feature-index mono">02</span>
-                        <h3>4-zone Kanban</h3>
-                        <p>Archive → To Do → In Progress → Done. Drag cards between columns, or reorder within a column.</p>
-                    </div>
-                    <div class="feature-card">
-                        <span class="feature-index mono">03</span>
-                        <h3>Inline editing</h3>
-                        <p>Double-click — or double-tap on mobile — any card to edit its title right where it sits.</p>
-                    </div>
-                    <div class="feature-card">
-                        <span class="feature-index mono">04</span>
-                        <h3>Owner &amp; due dates</h3>
-                        <p>Each card tracks an assignee and optional due date. Overdue turns red, due within 3 days turns orange.</p>
-                    </div>
-                    <div class="feature-card">
-                        <span class="feature-index mono">05</span>
-                        <h3>Owner filter</h3>
-                        <p>Quick-filter chips above the board — tap a name to see only that person's cards, on any board.</p>
-                    </div>
-                    <div class="feature-card">
-                        <span class="feature-index mono">06</span>
-                        <h3>Confetti on Done</h3>
-                        <p>Every card you drag to Done gets a small celebration. A tiny reward, every single time.</p>
-                    </div>
+                <div class="grid3">
+                    <article class="fcard"><span class="fcard__ico"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7l9-4 9 4-9 4-9-4z"/><path d="M3 12l9 4 9-4"/><path d="M3 17l9 4 9-4"/></svg></span><h3>Multiple boards</h3>
+                        <p>Create as many boards as you need. Tabs auto-paginate when they overflow — double-click a tab to rename it.</p></article>
+                    <article class="fcard"><span class="fcard__ico"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="5" height="16" rx="1.5"/><rect x="10" y="4" width="5" height="10" rx="1.5"/><rect x="17" y="4" width="4" height="13" rx="1.5"/></svg></span><h3>4-zone Kanban</h3>
+                        <p>Archive → To Do → In Progress → Done. Drag cards between columns, or reorder within a column.</p></article>
+                    <article class="fcard"><span class="fcard__ico"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></span><h3>Inline editing</h3>
+                        <p>Double-click — or double-tap on mobile — any card to edit its title right where it sits.</p></article>
+                    <article class="fcard"><span class="fcard__ico"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 11h18"/></svg></span><h3>Owner &amp; due dates</h3>
+                        <p>Each card tracks an assignee and optional due date. Overdue turns red, due within 3 days turns orange.</p></article>
+                    <article class="fcard"><span class="fcard__ico"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5h18l-7 8v6l-4-2v-4z"/></svg></span><h3>Owner filter</h3>
+                        <p>Quick-filter chips above the board — tap a name to see only that person's cards, on any board.</p></article>
+                    <article class="fcard"><span class="fcard__ico"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.8 4.6L18.5 9l-4.7 1.4L12 15l-1.8-4.6L5.5 9l4.7-1.4z"/><path d="M19 15l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z"/></svg></span><h3>Confetti on Done</h3>
+                        <p>Every card you drag to Done gets a small celebration. A tiny reward, every single time.</p></article>
                 </div>
             </div>
         </section>
 
-        <section class="tight" id="privacy">
+        <section class="lp-sec" id="privacy">
             <div class="wrap">
-                <div class="section-head">
-                    <div class="eyebrow mono">No middleman</div>
+                <div class="lp-head">
+                    <div class="eyebrow">No middleman</div>
                     <h2>Taskboards doesn't keep your data. Google does.</h2>
                     <p>There's no Taskboards database and no backend storing your boards — everything lives in a private folder inside your own Google Drive.</p>
                 </div>
-                <div class="mode-grid">
-                    <div class="mode-card">
-                        <span class="mono">Privacy 01</span>
-                        <h3>No server of ours</h3>
-                        <p>Board data goes straight from your browser to your Google Drive. We never see it, never store a copy, and could never leak what we don't have.</p>
-                    </div>
-                    <div class="mode-card">
-                        <span class="mono">Privacy 02</span>
-                        <h3>Yours to revoke</h3>
-                        <p>Remove Taskboards' access any time from your Google Account permissions, and every board it ever wrote goes with it — because it was never ours.</p>
-                    </div>
+                <div class="grid2">
+                    <article class="fcard"><h3>No server of ours</h3><p>Board data goes straight from your browser to your Google Drive. We never see it, never store a copy, and could never leak what we don't have.</p></article>
+                    <article class="fcard"><h3>Yours to revoke</h3><p>Remove Taskboards' access any time from your Google Account permissions, and every board it ever wrote goes with it — because it was never ours.</p></article>
                 </div>
             </div>
         </section>
 
-        <div class="wrap"><div class="divider"></div></div>
-
-        <section id="sync">
+        <section class="lp-sec" id="sync">
             <div class="wrap">
-                <div class="section-head">
-                    <div class="eyebrow mono">Sign in once</div>
+                <div class="lp-head">
+                    <div class="eyebrow">Sign in once</div>
                     <h2>Sync everywhere, without a new password.</h2>
                     <p>One Google sign-in, and your boards follow you — nothing to configure, nothing shared with other apps.</p>
                 </div>
@@ -737,12 +351,10 @@
             </div>
         </section>
 
-        <div class="wrap"><div class="divider"></div></div>
-
-        <section id="plans">
+        <section class="lp-sec" id="plans">
             <div class="wrap">
-                <div class="section-head">
-                    <div class="eyebrow mono">Plans</div>
+                <div class="lp-head">
+                    <div class="eyebrow">Plans</div>
                     <h2>Free for you. Built to grow with your team.</h2>
                     <p>Taskboards is free for personal use. Team plans are in preparation — and for companies that need to keep everything on their own infrastructure, we install and set it up with you.</p>
                 </div>
@@ -757,7 +369,7 @@
                             <li>Share a single board as a read-only link, protected by a passphrase</li>
                             <li>Works offline; export and import as a JSON file</li>
                         </ul>
-                        <a class="btn btn-primary" href="app.html">Continue with Google</a>
+                        <a class="btn btn--primary" href="app.html">Continue with Google</a>
                         <p class="tier-fine">Free forever.</p>
                     </article>
 
@@ -792,10 +404,10 @@
             </div>
         </section>
 
-        <section class="band" id="waitlist">
+        <section class="lp-sec band" id="waitlist">
             <div class="wrap">
-                <div class="section-head">
-                    <div class="eyebrow mono">Waitlist &amp; demo</div>
+                <div class="lp-head">
+                    <div class="eyebrow">Waitlist &amp; demo</div>
                     <h2>Want Teams, or a demo on your own infrastructure?</h2>
                     <p>Leave your details and we'll get in touch — about early access, or to schedule a demo of how Taskboards would be installed in your Google Workspace or Microsoft 365.</p>
                 </div>
@@ -832,19 +444,17 @@
                     <input class="hp" type="text" name="_gotcha" tabindex="-1" autocomplete="off" aria-hidden="true"><!-- honeypot: bots fill it, the form service drops those -->
                     <label class="chk full"><input type="checkbox" name="demo"><span>I'd like a demo call</span></label>
                     <label class="chk full"><input type="checkbox" name="consent" required><span>I agree to be contacted about Taskboards plans and demos.</span></label>
-                    <div class="full"><button class="btn btn-primary" type="submit">Join the waitlist</button></div>
+                    <div class="full"><button class="btn btn--primary" type="submit">Join the waitlist</button></div>
                 </form>
                 <p class="wl-fine">We use your details only to contact you about Taskboards plans and the demo. We don't share them with third parties; the submission is handled by Formspree, which stores it on our behalf. You can ask us to delete it at any time by replying to one of our emails.</p>
                 <div class="wl-msg" id="wlmsg" role="status" aria-live="polite"></div>
             </div>
         </section>
 
-        <div class="wrap"><div class="divider"></div></div>
-
-        <section id="roadmap">
+        <section class="lp-sec" id="roadmap">
             <div class="wrap">
-                <div class="section-head">
-                    <div class="eyebrow mono">Roadmap</div>
+                <div class="lp-head">
+                    <div class="eyebrow">Roadmap</div>
                     <h2>What we're building, in the open.</h2>
                     <p>What is being worked on now, what comes next, and what is further out. It changes as we learn from the people using Taskboards.</p>
                 </div>
@@ -852,47 +462,21 @@
             </div>
         </section>
 
-        <div class="wrap"><div class="divider"></div></div>
-
-        <section id="start">
-            <div class="wrap">
-                <div class="section-head">
-                    <div class="eyebrow mono">Get started</div>
+        <section class="lp-sec" id="start">
+            <div class="wrap lp-center">
+                <div class="lp-head lp-head--center">
                     <h2>Sign in and start dragging cards.</h2>
-                    <p>One Google account — no new password, no setup screen, no server of ours holding onto your data.</p>
+                    <p>Free, no setup, nothing stored on our end — your boards live in a private folder of your own Google Drive.</p>
                 </div>
-                <div class="download-grid download-grid--single">
-                    <div class="download-card primary">
-                        <svg class="platform-icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                            <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#ffffff"/>
-                            <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#ffffffcc"/>
-                            <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#ffffff99"/>
-                            <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#ffffffcc"/>
-                        </svg>
-                        <h3>Continue with Google</h3>
-                        <p>Sign in and every board saves straight to a private folder in your own Drive. Free, no setup, nothing stored on our end.</p>
-                        <a class="btn btn-primary" href="app.html">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4M10 17l5-5-5-5M15 12H3"/></svg>
-                            Continue with Google
-                        </a>
-                        <div class="file-meta">
-                            <span>Google Drive · appDataFolder only</span>
-                            <span>Free forever</span>
-                        </div>
-                    </div>
-                </div>
+                <a class="btn btn--primary btn--lg" href="app.html">Continue with Google</a>
             </div>
         </section>
     </main>
 
-    <footer>
-        <div class="wrap footer-inner">
+    <footer class="lp-foot">
+        <div class="wrap">
             <span>&copy; 2026 Taskboards &middot; vibe coded by <a href="https://www.linkedin.com/in/dferreiramarques/" target="_blank" rel="noopener">David Marques</a> &middot; MIT License</span>
-            <div class="footer-links">
-                <a href="https://github.com/dferreiramarques/taskboards" target="_blank" rel="noopener">GitHub</a>
-                <a href="https://ko-fi.com/dferreiramarques" target="_blank" rel="noopener">Support on Ko-fi</a>
-                <a href="app.html">Open the app</a>
-            </div>
+            <span><a href="https://github.com/dferreiramarques/taskboards" target="_blank" rel="noopener">GitHub</a> &middot; <a href="https://ko-fi.com/dferreiramarques" target="_blank" rel="noopener">Support on Ko-fi</a> &middot; <a href="app.html">Open the app</a></span>
         </div>
     </footer>
 
