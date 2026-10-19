@@ -748,7 +748,8 @@ body.dragging-active .shelf--done    .drop-overlay { display: flex; }
   padding: 10px 12px;
   cursor: grab;
   position: relative;
-  touch-action: none;
+  touch-action: pan-y;
+  -webkit-touch-callout: none;
   user-select: none;
   transition: transform var(--f-normal) var(--f-ease), box-shadow var(--f-normal) var(--f-ease), border-color var(--f-normal) var(--f-ease);
   box-shadow: var(--f-shadow2);
@@ -899,7 +900,8 @@ body.dragging-active .shelf--done    .drop-overlay { display: flex; }
   display: flex;
   align-items: center;
   gap: 10px;
-  touch-action: none;
+  touch-action: pan-y;
+  -webkit-touch-callout: none;
   user-select: none;
   box-shadow: none;
   transition: background var(--f-fast), box-shadow var(--f-fast);

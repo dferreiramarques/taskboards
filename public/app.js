@@ -2034,7 +2034,9 @@ function attachCardEvents(el) {
   });
 }
 
-// Double-click or right-click: the card turns red and shows ✎ edit and ✕ delete
+// Double-click (desktop), long-press (touch) or right-click: the card turns red and shows ✎ edit and ✕ delete
+const LONG_PRESS_MS = 500;
+let lastCardPointerType = 'mouse';
 function armCard(id) {
   if (deleteCardId === id) return;
   if (deleteCardId) dismissDelete();
@@ -2042,6 +2044,7 @@ function armCard(id) {
 }
 function onCardDblClick(e) {
   if (e.target.closest('.card__actions')) return;
+  if (lastCardPointerType === 'touch') return;   // on touch only a long-press enters edit mode
   armCard(e.currentTarget.dataset.id);
 }
 function onCardContext(e) {
@@ -2054,11 +2057,20 @@ function onCardDown(e) {
   if (e.target.closest('.card__actions'))  return;
   if (e.button === 2) return;   // right-click arms the card, it must not start a drag
   const cardEl = e.currentTarget, id = cardEl.dataset.id;
+  lastCardPointerType = e.pointerType;
   if (deleteCardId && deleteCardId !== id) { dismissDelete(); return; }
   if (deleteCardId === id) return;
   cardEl.setPointerCapture(e.pointerId);
   const sourceZone = cardEl.closest('[data-zone]')?.dataset.zone || 'todo';
   dragState = { cardId:id, startX:e.clientX, startY:e.clientY, dragging:false, cancelled:false, sourceEl:cardEl, currentZone:null, insertBefore:null, sourceZone };
+  if (e.pointerType === 'touch') {
+    // Vertical swipes scroll the list (touch-action: pan-y); holding still arms the card
+    dragState.pressTimer = setTimeout(() => {
+      if (!dragState || dragState.dragging || dragState.sourceEl !== cardEl) return;
+      onCardUp();
+      armCard(id);
+    }, LONG_PRESS_MS);
+  }
   cardEl.addEventListener('pointermove', onCardMove);
   cardEl.addEventListener('pointerup',   onCardUp);
   cardEl.addEventListener('pointercancel', onCardUp);
@@ -2071,6 +2083,7 @@ function onCardMove(e) {
     const dy = e.clientY - dragState.startY;
     const dist = Math.hypot(dx, dy);
     if (dist < DRAG_THRESHOLD) return;
+    clearTimeout(dragState.pressTimer);
 
     // Start drag in any direction
     e.preventDefault();
@@ -2100,6 +2113,7 @@ function onCardMove(e) {
 
 function onCardUp(e) {
   if (!dragState) return;
+  clearTimeout(dragState.pressTimer);
   hideDropIndicator();
   if (dragState.dragging && dragState.currentZone) {
     moveOrReorderCard(dragState.cardId, dragState.currentZone, dragState.insertBefore || null);
