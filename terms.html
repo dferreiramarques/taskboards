@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <script>
+        (function () {
+            var saved = localStorage.getItem('taskboards-theme') || 'dark';
+            document.documentElement.setAttribute('data-theme', saved);
+        })();
+    </script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#0078d4">
+    <meta name="description" content="Terms of use for Taskboards.">
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <title>Terms of use — Taskboards</title>
+    <link rel="stylesheet" href="./product-page.css">
+    <style>
+        /* Taskboards accent: colours only (sizes and spacing come from product-page.css). */
+        [data-theme="light"] { --primary: #0078d4; --primary-h: #106ebe; --primary-ink: #ffffff; --primary-soft: rgba(0, 120, 212, .14); --glow: rgba(0, 120, 212, .10); }
+        [data-theme="dark"] { --primary: #479ef5; --primary-h: #62abf5; --primary-ink: #0e0e16; --primary-soft: rgba(71, 158, 245, .16); --glow: rgba(71, 158, 245, .12); }
+        [hidden] { display: none !important; }
+        a { color: inherit; }
+    </style>
+</head>
+<body>
+    <header class="topbar">
+        <div class="wrap topbar__in">
+            <a class="brand" href="/">
+                <span class="brand__mark" aria-hidden="true">
+                    <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="5" height="16" rx="1.5"/><rect x="10" y="4" width="5" height="10" rx="1.5"/><rect x="17" y="4" width="4" height="13" rx="1.5"/></svg>
+                </span>
+                Taskboards
+            </a>
+            <span class="grow"></span>
+            <button class="btn btn--text btn--icon" id="themeToggle" aria-label="Toggle light / dark theme" title="Toggle theme">
+                <svg class="ico" id="themeIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"></svg>
+            </button>
+            <a class="btn btn--primary" href="app.html">Open the app</a>
+        </div>
+    </header>
+
+    <main class="wrap doc">
+        <h1>Terms of use</h1>
+        <p class="doc__date">Last updated 19 October 2026</p>
+        <p>By using Taskboards (<a href="https://taskboards.monco.io">taskboards.monco.io</a>) you agree to these terms.</p>
+
+        <h2>The service</h2>
+        <p>Taskboards is a free Kanban board app. Its source code is available under the MIT License. The service is provided as is, without warranties of any kind, and may change or stop at any time. Paid plans for teams may be offered in the future; they will be announced before anything changes for you.</p>
+
+        <h2>Your content</h2>
+        <p>Your boards are yours and are stored in your own Google Drive. You are responsible for what you write and for what you choose to share. Do not store or share anything unlawful, infringing or harmful. A shared board can be opened by anyone who has both the link and the passphrase, and the shared copy may stay downloadable for a short time after you stop sharing.</p>
+
+        <h2>Your account and passphrases</h2>
+        <p>You sign in with your Google account and are responsible for its security. If you lose the passphrase of a shared board it cannot be recovered for you: stop sharing and share again with a new one. You can stop using Taskboards at any time and revoke its access in your Google Account.</p>
+
+        <h2>Acceptable use</h2>
+        <p>Do not abuse the service: no attempts to overload it, to access other people's data, or to use it to distribute malware or spam.</p>
+
+        <h2>Liability</h2>
+        <p>To the extent allowed by law, Taskboards is not liable for any loss of data or other damages arising from the use of the service. Keep your own backups; the app can export your boards as a file.</p>
+
+        <h2>Privacy</h2>
+        <p>How your data is handled is described in the <a href="privacy.html">privacy policy</a>.</p>
+
+        <h2>Changes</h2>
+        <p>These terms may be updated; the current version is always on this page.</p>
+    </main>
+
+    <footer class="lp-foot">
+        <div class="wrap">
+            <span>&copy; 2026 Taskboards &middot; vibe coded by <a href="https://www.linkedin.com/in/dferreiramarques/" target="_blank" rel="noopener">David Marques</a> &middot; MIT License</span>
+            <span><a href="privacy.html">Privacy</a> &middot; <a href="terms.html">Terms</a> &middot; <a href="https://github.com/dferreiramarques/taskboards" target="_blank" rel="noopener">GitHub</a> &middot; <a href="app.html">Open the app</a></span>
+        </div>
+    </footer>
+
+    <script>
+        (function () {
+            var moon = 'M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79Z';
+            var sun = 'M12 3v2m0 14v2m9-9h-2M5 12H3m15.36 6.36-1.41-1.41M7.05 7.05 5.64 5.64m12.72 0-1.41 1.41M7.05 16.95l-1.41 1.41';
+            var icon = document.getElementById('themeIcon');
+            var btn = document.getElementById('themeToggle');
+            function paint() {
+                var mode = document.documentElement.getAttribute('data-theme');
+                var isDark = mode === 'dark' || (mode !== 'light' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+                icon.innerHTML = isDark ? '<path d="' + sun + '"/><circle cx="12" cy="12" r="4"/>' : '<path d="' + moon + '"/>';
+            }
+            btn.addEventListener('click', function () {
+                var next = (document.documentElement.getAttribute('data-theme') || 'dark') === 'dark' ? 'light' : 'dark';
+                document.documentElement.setAttribute('data-theme', next);
+                try { localStorage.setItem('taskboards-theme', next); } catch (e) {}
+                paint();
+            });
+            paint();
+        })();
+    </script>
+</body>
+</html>

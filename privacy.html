@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <script>
+        (function () {
+            var saved = localStorage.getItem('taskboards-theme') || 'dark';
+            document.documentElement.setAttribute('data-theme', saved);
+        })();
+    </script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#0078d4">
+    <meta name="description" content="Privacy policy for Taskboards.">
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <title>Privacy policy — Taskboards</title>
+    <link rel="stylesheet" href="./product-page.css">
+    <style>
+        /* Taskboards accent: colours only (sizes and spacing come from product-page.css). */
+        [data-theme="light"] { --primary: #0078d4; --primary-h: #106ebe; --primary-ink: #ffffff; --primary-soft: rgba(0, 120, 212, .14); --glow: rgba(0, 120, 212, .10); }
+        [data-theme="dark"] { --primary: #479ef5; --primary-h: #62abf5; --primary-ink: #0e0e16; --primary-soft: rgba(71, 158, 245, .16); --glow: rgba(71, 158, 245, .12); }
+        [hidden] { display: none !important; }
+        a { color: inherit; }
+    </style>
+</head>
+<body>
+    <header class="topbar">
+        <div class="wrap topbar__in">
+            <a class="brand" href="/">
+                <span class="brand__mark" aria-hidden="true">
+                    <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="5" height="16" rx="1.5"/><rect x="10" y="4" width="5" height="10" rx="1.5"/><rect x="17" y="4" width="4" height="13" rx="1.5"/></svg>
+                </span>
+                Taskboards
+            </a>
+            <span class="grow"></span>
+            <button class="btn btn--text btn--icon" id="themeToggle" aria-label="Toggle light / dark theme" title="Toggle theme">
+                <svg class="ico" id="themeIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"></svg>
+            </button>
+            <a class="btn btn--primary" href="app.html">Open the app</a>
+        </div>
+    </header>
+
+    <main class="wrap doc">
+        <h1>Privacy policy</h1>
+        <p class="doc__date">Last updated 19 October 2026</p>
+        <p>Taskboards (<a href="https://taskboards.monco.io">taskboards.monco.io</a>) is a Kanban board app. This page explains what happens to your data.</p>
+
+        <h2>What we do not do</h2>
+        <p>Taskboards has no database of boards and does not store them. Your boards go from your browser to your own Google Drive and nowhere else. We do not sell or share your data, and we use no advertising or tracking cookies.</p>
+
+        <h2>What Taskboards accesses in your Google account</h2>
+        <ul>
+            <li><strong>Your name, email and profile picture</strong>, shown in the app so you can see which account is signed in. They are read in your browser and are not stored by us.</li>
+            <li><strong>A private app folder in your Google Drive</strong> (scope <code>drive.appdata</code>), where your boards are saved in one file. Only Taskboards can see this folder.</li>
+            <li><strong>Files that Taskboards itself creates</strong> (scope <code>drive.file</code>), used only when you share a board: a separate copy of that board, readable by anyone with the link but encrypted with a passphrase that only you and the people you tell know. Taskboards cannot see any other file in your Drive.</li>
+        </ul>
+        <p>Taskboards uses this access only to load and save your boards and to publish or unpublish a shared copy when you ask. Use of information received from Google APIs adheres to the <a href="https://developers.google.com/terms/api-services-user-data-policy">Google API Services User Data Policy</a>, including the Limited Use requirements.</p>
+
+        <h2>What our servers handle</h2>
+        <ul>
+            <li><strong>Sign-in:</strong> to keep you signed in for months without asking Google again, a small session server (<code>auth.monco.io</code>) keeps a Google refresh token in an encrypted cookie in your browser. The server itself does not store it and never sees your boards. Signing out revokes the token and removes the cookie.</li>
+            <li><strong>Shared boards:</strong> a visitor who opens a shared link downloads the encrypted copy directly from Google Drive and decrypts it in their own browser with the passphrase. Our servers are not involved.</li>
+            <li><strong>Anonymous sign-in counter:</strong> to know roughly how many people use Taskboards, the app records that <em>some</em> account signed in. Your Google account id is turned into an irreversible hash in your browser before it is sent, so we and our database provider (Supabase) only ever see that hash, never your email or name.</li>
+            <li><strong>Waitlist and demo requests:</strong> if you fill in the form on the home page, the details you type (email, and optionally name, company, team size and message) are sent to the form service Formspree. We use them only to reply to you.</li>
+            <li><strong>Logs and hosting:</strong> the site is served from GitHub Pages and the session server runs at a hosting provider; both may keep standard request logs, such as IP addresses, for security and operation. The pages load fonts from Google Fonts, which sees your IP address when it does.</li>
+        </ul>
+
+        <h2>In your browser</h2>
+        <p>Taskboards keeps a local copy of your boards, your theme choice and a few settings in your browser storage, and caches the app files, so it works offline. Signing out or clearing site data removes them.</p>
+
+        <h2>Your control</h2>
+        <ul>
+            <li>Stop sharing a board, or delete it, and its shared copy is deleted from your Drive.</li>
+            <li>Revoke Taskboards at any time in your <a href="https://myaccount.google.com/permissions">Google Account permissions</a>.</li>
+            <li>Delete your data by removing the app data from Google Drive (Settings → Manage apps → Taskboards).</li>
+            <li>Ask about, or ask us to delete, anything you sent through the waitlist form by contacting us (see below).</li>
+        </ul>
+
+        <h2>Contact</h2>
+        <p>Questions about this policy: open an issue on <a href="https://github.com/dferreiramarques/taskboards/issues">GitHub</a> or reach David Marques via <a href="https://www.linkedin.com/in/dferreiramarques/">LinkedIn</a>.</p>
+
+        <h2>Changes</h2>
+        <p>If this policy changes, the new version will be published on this page with a new date.</p>
+    </main>
+
+    <footer class="lp-foot">
+        <div class="wrap">
+            <span>&copy; 2026 Taskboards &middot; vibe coded by <a href="https://www.linkedin.com/in/dferreiramarques/" target="_blank" rel="noopener">David Marques</a> &middot; MIT License</span>
+            <span><a href="privacy.html">Privacy</a> &middot; <a href="terms.html">Terms</a> &middot; <a href="https://github.com/dferreiramarques/taskboards" target="_blank" rel="noopener">GitHub</a> &middot; <a href="app.html">Open the app</a></span>
+        </div>
+    </footer>
+
+    <script>
+        (function () {
+            var moon = 'M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79Z';
+            var sun = 'M12 3v2m0 14v2m9-9h-2M5 12H3m15.36 6.36-1.41-1.41M7.05 7.05 5.64 5.64m12.72 0-1.41 1.41M7.05 16.95l-1.41 1.41';
+            var icon = document.getElementById('themeIcon');
+            var btn = document.getElementById('themeToggle');
+            function paint() {
+                var mode = document.documentElement.getAttribute('data-theme');
+                var isDark = mode === 'dark' || (mode !== 'light' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+                icon.innerHTML = isDark ? '<path d="' + sun + '"/><circle cx="12" cy="12" r="4"/>' : '<path d="' + moon + '"/>';
+            }
+            btn.addEventListener('click', function () {
+                var next = (document.documentElement.getAttribute('data-theme') || 'dark') === 'dark' ? 'light' : 'dark';
+                document.documentElement.setAttribute('data-theme', next);
+                try { localStorage.setItem('taskboards-theme', next); } catch (e) {}
+                paint();
+            });
+            paint();
+        })();
+    </script>
+</body>
+</html>
