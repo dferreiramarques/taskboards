@@ -463,6 +463,12 @@ function setSyncStatus(state, label) {
   const dot = q('#sync-dot'), lbl = q('#sync-label');
   if (dot) { dot.className = 'sync-dot ' + state; }
   if (lbl) lbl.textContent = label;
+  const chip = q('#sync-chip');
+  if (chip) {
+    chip.hidden = false;
+    chip.textContent = label;
+    chip.className = 'chip ' + ({ synced: 'chip--ok', syncing: 'chip--info', error: 'chip--danger' }[state] || 'chip--muted');
+  }
 }
 
 // ─── SKELETON LOADING ────────────────────────────────────────────────────────
@@ -1979,6 +1985,8 @@ function renderZone(containerId, zoneCards, compact) {
 
 // Single-colour line icons (they follow the text colour) instead of colour emoji
 const ICON_LOCK   = `<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>`;
+const ICON_SUN    = `<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>`;
+const ICON_MOON   = `<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>`;
 const ICON_ROCKET = `<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2c3 2.5 4.5 6 4.5 9.5V16l2 3h-4L12 22l-2.5-3h-4l2-3v-4.5C7.5 8 9 4.5 12 2z"/><circle cx="12" cy="10" r="1.6"/></svg>`;
 
 // Shown at the right of a card once it is red (double-click / right-click)
@@ -2371,7 +2379,7 @@ function initTheme() {
 }
 function applyTheme(theme, animate=true) {
   document.documentElement.setAttribute('data-theme', theme);
-  q('#theme-icon').textContent = theme==='dark' ? '☽' : '☀\uFE0E';   // FE0E: always the plain text glyph, never the colour emoji
+  q('#theme-icon').innerHTML = theme==='dark' ? ICON_SUN : ICON_MOON;   // same icons as Roadmaps: the icon offers the other theme
   localStorage.setItem(LS_THEME, theme);
   const mc=document.querySelector('meta[name="theme-color"]');
   // browser chrome follows the theme's own background, so light and dark stay consistent

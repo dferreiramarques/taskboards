@@ -57,26 +57,36 @@
   <div id="confetti-layer" class="confetti-layer" aria-hidden="true"></div>
   <div id="toast-container" class="toast-container" aria-live="polite"></div>
 
-  <!-- ── TOP BAR ROW 1: login + brand + actions ── -->
-  <div class="topbar">
-    <!-- LEFT: brand -->
-    <div class="topbar__brand">
-      <span class="topbar__logo">◈</span>
-      <span class="topbar__name">TASKBOARDS</span>
+  <!-- ── TOP BAR: brand · board tabs · sync · theme · account ── -->
+  <header class="topbar">
+    <a class="topbar__brand" href="./index.html" title="About Taskboards">
+      <span class="topbar__logo" aria-hidden="true">
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="5" height="16" rx="1.5"/><rect x="10" y="4" width="5" height="10" rx="1.5"/><rect x="17" y="4" width="4" height="13" rx="1.5"/></svg>
+      </span>
+      <span class="topbar__name">Taskboards</span>
+    </a>
+
+    <div class="boards-bar">
+      <button class="tab-nav" id="tab-prev" title="Previous boards">‹</button>
+      <div class="boards-tabs" id="boards-tabs">
+        <!-- Tabs injected by JS -->
+      </div>
+      <button class="tab-nav" id="tab-next" title="Next boards">›</button>
+      <button class="tab-add" id="add-board" title="New board">+</button>
     </div>
 
-    <!-- RIGHT: help + theme + Google login -->
     <div class="topbar__actions">
+      <span class="chip chip--muted" id="sync-chip" hidden>Offline</span>
       <button id="help-btn" class="topbar__btn" title="How it works">?</button>
       <button id="install-btn" class="topbar__btn topbar__btn--install" title="Install app" style="display:none">⬇</button>
-      <button id="theme-btn" class="topbar__btn topbar__btn--theme" title="Toggle theme">
-        <span id="theme-icon">☽</span>
+      <button id="theme-btn" class="topbar__btn topbar__btn--theme" title="Toggle theme" aria-label="Toggle light / dark theme">
+        <span id="theme-icon"></span>
       </button>
 
       <!-- Google SSO — signed in always, gate below handles sign-in -->
       <div class="topbar__login" id="login-area">
         <div class="user-pill hidden" id="user-pill">
-          <img class="user-pill__avatar" id="user-avatar" src="" alt="" />
+          <img class="user-pill__avatar" id="user-avatar" src="" alt="" referrerpolicy="no-referrer" />
           <span class="user-pill__name" id="user-name"></span>
           <div class="user-pill__menu" id="user-menu">
             <div class="user-pill__menu-email" id="user-email-menu"></div>
@@ -93,17 +103,7 @@
         </div>
       </div>
     </div>
-  </div>
-
-  <!-- ── TOP BAR ROW 2: board tabs ── -->
-  <div class="boards-bar">
-    <button class="tab-nav" id="tab-prev" title="Previous boards">‹</button>
-    <div class="boards-tabs" id="boards-tabs">
-      <!-- Tabs injected by JS -->
-    </div>
-    <button class="tab-nav" id="tab-next" title="Next boards">›</button>
-    <button class="tab-add" id="add-board" title="New board">+</button>
-  </div>
+  </header>
 
   <!-- ── OWNER FILTER CHIPS ── -->
   <div class="owner-filter-bar" id="owner-filter-bar">
