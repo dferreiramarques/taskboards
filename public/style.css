@@ -22,12 +22,12 @@
   --f-stroke1:    #d1d1d1;
   --f-stroke2:    #e0e0e0;
   /* Brand */
-  --f-brand:      #0078d4;
-  --f-brand-h:    #106ebe;
-  --f-brand-a:    #005a9e;
+  --f-brand:      #E52B50;
+  --f-brand-h:    #D1264A;
+  --f-brand-a:    #B21F3F;
   --f-brand-ink:  #ffffff;
-  --f-brand-bg:   rgba(0,120,212,.12);
-  --f-brand-bg2:  rgba(0,120,212,.08);
+  --f-brand-bg:   rgba(229,43,80,.12);
+  --f-brand-bg2:  rgba(229,43,80,.08);
   --f-hover:      rgba(0,0,0,.04);
   /* Status */
   --f-success:    #107c10;
@@ -111,11 +111,11 @@
   --f-fg4:     #707070;
   --f-stroke1: #404040;
   --f-stroke2: #2e2e2e;
-  --f-brand:      #479ef5;
-  --f-brand-h:    #62abf5;
-  --f-brand-a:    #2886de;
-  --f-brand-bg:   rgba(71,158,245,.12);
-  --f-brand-bg2:  rgba(71,158,245,.08);
+  --f-brand:      #F0506E;
+  --f-brand-h:    #F46B84;
+  --f-brand-a:    #E03A5C;
+  --f-brand-bg:   rgba(240,80,110,.12);
+  --f-brand-bg2:  rgba(240,80,110,.08);
   --f-hover:      rgba(255,255,255,.04);
   --f-success:    #54b054;
   --f-success-bg: rgba(84,176,84,.12);
