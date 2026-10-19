@@ -115,19 +115,13 @@ Each board has a lock in its tab: **🔒 private** (default) or **🚀 public**.
 
 ---
 
-## Roadmap (read-only here)
+## Roadmap (shown from Roadmaps)
 
 The roadmap of each product is **edited in the separate Roadmaps app** (its own repository, hosted on Railway). Taskboards only *shows* it:
 
-- **`roadmap.html`** — a read-only page with the **Now / Next / Later** columns (product switcher, light/dark). Link: `roadmap.html?app=taskboards`.
-- **`roadmap-embed.js`** — a widget that puts a product's roadmap on any page, isolated from the page's CSS and following its theme (the landing page uses it):
-
-  ```html
-  <div data-roadmap="taskboards"></div>
-  <script src="https://taskboards.monco.io/roadmap-embed.js" defer></script>
-  ```
-
-- **Where the data comes from:** `ROADMAP_SRC` in `config.js`. Leave it blank to use the `roadmap.json` that sits next to the pages (the starting data, kept as a fallback), or set it to the hosted app's public dataset, e.g. `'https://roadmap.monco.io/api/roadmap.json'`. Both the page and the widget read from it.
+- **Landing page:** embeds the public Taskboards roadmap with the Roadmaps widget (`<div data-roadmap="<id>">` plus `https://roadmaps.monco.io/embed.js`). The widget follows the page's light/dark theme and is isolated from its CSS.
+- **`roadmap.html`:** redirects to the roadmap's public page on Roadmaps (`https://roadmaps.monco.io/r/<id>`), so old links keep working.
+- To change the roadmap, sign in to Roadmaps and edit it there: every change shows up here without a deploy.
 
 ---
 
@@ -198,9 +192,7 @@ taskboards/
 │   ├── sw.js           # Service worker — cache versioning, offline support
 │   ├── manifest.json   # PWA manifest — icons, display mode, theme colour
 │   ├── share-core.js   # Passphrase + AES-GCM encryption for shared boards
-│   ├── roadmap.html/.js/.css  # Read-only roadmap page (Now / Next / Later)
-│   ├── roadmap.json    # Fallback roadmap data (the Roadmaps app is the source of truth)
-│   ├── roadmap-embed.js  # Widget that shows a roadmap on any product page
+│   ├── roadmap.html    # Redirect to the roadmap page on Roadmaps
 │   ├── view.html/.js/.css  # Read-only viewer for a shared board
 │   └── config.js       # Google Client ID (not secret, safe to commit)
 ├── auth.js             # Optional session server: refresh-token cookie, /auth/*
