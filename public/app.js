@@ -2095,25 +2095,67 @@ function onCardMove(e) {
   }
   if (dragState.dragging) {
     e.preventDefault();
+    dragState.lastX = e.clientX; dragState.lastY = e.clientY;
     moveGhost(e.clientX, e.clientY);
-    const z = detectZone(e.clientX, e.clientY);
-    const targetZone = z || dragState.sourceZone;
-    highlightZone(targetZone);
-    dragState.currentZone = targetZone;
-    if (targetZone) {
-      const { insertBefore, refEl } = detectInsertPosition(targetZone, e.clientX, e.clientY, dragState.cardId);
-      dragState.insertBefore = insertBefore;
-      showDropIndicator(targetZone, refEl);
-    } else {
-      hideDropIndicator();
-      dragState.insertBefore = null;
-    }
+    updateDropTarget();
+    startAutoScroll();
   }
+}
+
+// Zone, drop position and indicator for the last known pointer position
+function updateDropTarget() {
+  const { lastX: x, lastY: y } = dragState;
+  const z = detectZone(x, y);
+  const targetZone = z || dragState.sourceZone;
+  highlightZone(targetZone);
+  dragState.currentZone = targetZone;
+  if (targetZone) {
+    const { insertBefore, refEl } = detectInsertPosition(targetZone, x, y, dragState.cardId);
+    dragState.insertBefore = insertBefore;
+    showDropIndicator(targetZone, refEl);
+  } else {
+    hideDropIndicator();
+    dragState.insertBefore = null;
+  }
+}
+
+// Auto-scroll: holding a dragged card near the top/bottom edge of a list scrolls it
+// (speed grows towards the edge) until the card is dropped or moved away.
+const AUTOSCROLL_EDGE = 56, AUTOSCROLL_MAX = 14;   // px band, max px per frame
+let autoScrollRaf = 0;
+function scrollerOf(el) {
+  for (let n = el; n && n !== document.body; n = n.parentElement) {
+    const oy = getComputedStyle(n).overflowY;
+    if ((oy === 'auto' || oy === 'scroll') && n.scrollHeight > n.clientHeight) return n;
+  }
+  return null;
+}
+function autoScrollStep() {
+  autoScrollRaf = 0;
+  if (!dragState || !dragState.dragging || !dragState.currentZone) return;
+  const zoneRect = q(ZONE_EL[dragState.currentZone])?.getBoundingClientRect();
+  const sc = scrollerOf(q(ZONE_CARD_CONTAINERS[dragState.currentZone]));
+  if (!zoneRect || !sc) return;
+  const y = dragState.lastY, r = sc.getBoundingClientRect();
+  if (y < zoneRect.top || y > zoneRect.bottom) return;
+  let dy = 0;
+  if (y < r.top + AUTOSCROLL_EDGE)         dy = -AUTOSCROLL_MAX * Math.min(1, (r.top + AUTOSCROLL_EDGE - y) / AUTOSCROLL_EDGE);
+  else if (y > r.bottom - AUTOSCROLL_EDGE) dy =  AUTOSCROLL_MAX * Math.min(1, (y - (r.bottom - AUTOSCROLL_EDGE)) / AUTOSCROLL_EDGE);
+  if (!dy) return;
+  const before = sc.scrollTop;
+  sc.scrollTop += dy;
+  if (sc.scrollTop === before) return;   // already at the end
+  updateDropTarget();                     // cards moved under the pointer
+  autoScrollRaf = requestAnimationFrame(autoScrollStep);
+}
+function startAutoScroll() {
+  if (!autoScrollRaf) autoScrollRaf = requestAnimationFrame(autoScrollStep);
 }
 
 function onCardUp(e) {
   if (!dragState) return;
   clearTimeout(dragState.pressTimer);
+  cancelAnimationFrame(autoScrollRaf); autoScrollRaf = 0;
   hideDropIndicator();
   if (dragState.dragging && dragState.currentZone) {
     moveOrReorderCard(dragState.cardId, dragState.currentZone, dragState.insertBefore || null);
