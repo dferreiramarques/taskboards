@@ -40,6 +40,12 @@ window.TASKBOARDS_CONFIG = {
   // hide the waitlist form. Submissions are tagged "Taskboards: waitlist / demo request".
   WAITLIST_URL: 'https://formspree.io/f/xoejrvnj',
 
+  // ─── Roadmap (optional) ───────────────────────────────────────────────────
+  // Where roadmap.html and the roadmap widget read the roadmap from. The roadmap is edited in the separate
+  // Roadmaps app; set this to its public dataset, e.g. 'https://roadmap.monco.io/api/roadmap.json'.
+  // Leave blank to use the roadmap.json that sits next to these pages.
+  ROADMAP_SRC: '',
+
   // ─── Anonymous unique-sign-in counter (optional) ──────────────────────────
   // Not a secret — this key can only insert/update a one-way hash of the
   // signed-in user's Google id (see users_seen table RLS policies). It can

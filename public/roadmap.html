@@ -15,31 +15,25 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="./roadmap.css" />
+  <script src="./config.js"></script>
 </head>
 <body>
 
   <header class="topbar">
     <div class="wrap topbar__in">
-      <a class="brand" href="./roadmap.html">
+      <a class="brand" href="./index.html">
         <span class="brand__mark" aria-hidden="true">
           <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h6M4 12h10M4 18h14"/><circle cx="17" cy="6" r="2"/><circle cx="19" cy="12" r="2"/></svg>
         </span>
         Roadmap
       </a>
 
-      <div class="seg" id="products" role="group" aria-label="Product"></div>
+      <div class="seg" id="products" role="group" aria-label="Product" hidden></div>
 
       <span class="grow"></span>
 
       <div class="actions">
-        <button class="btn btn--outline only-edit" id="btn-import" title="Replace the roadmap with a roadmap.json file">
-          <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5-5 5 5"/><path d="M12 5v12"/></svg>
-          Import
-        </button>
-        <button class="btn btn--primary only-edit" id="btn-export" title="Download roadmap.json — commit it to publish">
-          <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/></svg>
-          Export
-        </button>
+        <a class="btn btn--outline" href="./index.html">Open Taskboards</a>
         <button class="btn btn--text btn--icon" id="btn-theme" aria-label="Toggle light / dark theme" title="Toggle theme"></button>
       </div>
     </div>
@@ -47,17 +41,8 @@
 
   <main class="wrap">
     <section class="hero" id="hero"></section>
-
     <section class="cols" id="cols" aria-label="Roadmap"></section>
-
-    <p class="note only-edit" id="note">
-      Edits are saved in this browser only. <strong>Export</strong> a <code>roadmap.json</code> and commit it to publish
-      it on the product pages. Add <code>?view=1</code> to this page's address for a read-only view.
-    </p>
   </main>
-
-  <div class="toasts" id="toasts" aria-live="polite"></div>
-  <input type="file" id="file" accept="application/json,.json" hidden />
 
   <script src="./roadmap.js"></script>
 </body>

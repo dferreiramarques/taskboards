@@ -4,7 +4,7 @@
  *   <script src="https://taskboards.monco.io/roadmap-embed.js" defer></script>
  *
  * Optional attributes on the div:
- *   data-src="…/roadmap.json"   where to read the roadmap from (default: next to this script)
+ *   data-src="…/roadmap.json"   where to read the roadmap from (default: ROADMAP_SRC from config.js if the page has it, else next to this script)
  *   data-theme="light|dark"     force a theme (default: follows <html data-theme> or the OS setting)
  *
  * It renders inside a shadow root, so the host page's CSS can't break it and it can't break the page.
@@ -136,7 +136,7 @@
     wrap.append(inner);
     inner.append(el('div', 'msg', 'Loading roadmap…'));
 
-    var src = host.getAttribute('data-src') || BASE + 'roadmap.json';
+    var src = host.getAttribute('data-src') || (window.TASKBOARDS_CONFIG && window.TASKBOARDS_CONFIG.ROADMAP_SRC) || BASE + 'roadmap.json';
     fetch(src, { cache: 'no-cache' })
       .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
       .then(function (raw) {
