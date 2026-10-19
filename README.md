@@ -11,9 +11,9 @@
 
 | | |
 |---|---|
-| **Multiple boards** | Create as many boards as you need. Tabs auto-paginate when they overflow. Double-click a tab to rename it. |
+| **Multiple boards** | Create as many boards as you need. Tabs auto-paginate when they overflow. Double-click a tab to rename it, **drag** it to reorder (hover ‹ › to reach another page), and **right-click** it (long-press on touch) to pick its colour. |
 | **4-zone Kanban** | Archive → To Do → In Progress → Done. Drag cards between columns or reorder within a column. |
-| **Inline editing** | Double-click (or double-tap on mobile) any card to edit its title in place. |
+| **Edit or delete a card** | Double-click, double-tap or right-click a card: it turns red and shows ✎ (edit — the same form as a new card) and ✕ (delete) on its right. Click elsewhere to cancel. |
 | **Owner & due date** | Each card tracks an assignee and optional due date. Overdue = red, due ≤ 3 days = orange. |
 | **Owner filter** | Quick-filter chips above the board — tap an owner to see only their cards. |
 | **Google sign-in required** | A full-screen gate blocks the board until you sign in with Google. There is no local/offline account-free mode. |

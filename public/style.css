@@ -311,6 +311,58 @@ body {
   user-select: none;
 }
 
+.board-tab { touch-action: none; }
+.board-tab.dragging-source { opacity: .35; }
+.tab-drag-ghost {
+  position: fixed; z-index: 9999;
+  pointer-events: none;
+  opacity: .92;
+  box-shadow: var(--f-shadow16);
+  transform: rotate(-1.5deg);
+}
+.tab-drop-marker {
+  position: fixed; z-index: 9998;
+  width: 3px; border-radius: 2px;
+  background: var(--f-brand);
+  box-shadow: 0 0 6px var(--f-brand);
+  pointer-events: none;
+  display: none;
+}
+body.tab-dragging, body.tab-dragging * { cursor: grabbing !important; }
+
+.color-menu {
+  position: fixed; z-index: 9999;
+  width: 212px; padding: 12px;
+  background: var(--f-bg1);
+  border: 1px solid var(--f-stroke1);
+  border-radius: var(--f-r8);
+  box-shadow: var(--f-shadow16);
+  animation: fade-in var(--f-fast) var(--f-ease);
+}
+.color-menu__title { margin-bottom: 8px; font-size: .6875rem; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--f-fg3); }
+.color-menu__grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; }
+.color-menu__sw {
+  width: 24px; height: 24px; padding: 0;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  box-shadow: inset 0 0 0 1px rgba(0,0,0,.25);
+  cursor: pointer;
+  transition: transform var(--f-fast);
+}
+.color-menu__sw:hover { transform: scale(1.15); }
+.color-menu__sw.active { border-color: var(--f-fg1); }
+.color-menu__row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 10px; }
+.color-menu__custom { display: flex; align-items: center; gap: 8px; font-size: .75rem; color: var(--f-fg2); }
+.color-menu__custom input { width: 30px; height: 24px; padding: 0; border: 1px solid var(--f-stroke1); border-radius: 4px; background: none; cursor: pointer; }
+.color-menu__auto {
+  padding: 4px 10px;
+  font: inherit; font-size: .75rem;
+  background: var(--f-bg2); color: var(--f-fg2);
+  border: 1px solid var(--f-stroke1); border-radius: var(--f-r4);
+  cursor: pointer;
+}
+.color-menu__auto:hover { background: var(--f-bg3); color: var(--f-fg1); }
+
 .board-tab:hover {
   background: var(--f-bg3);
   color: var(--f-fg1);
@@ -747,31 +799,39 @@ body.dragging-active .shelf--done    .drop-overlay { display: flex; }
   80%     { transform: translateX(4px); }
 }
 
-.card__delete-btn {
+/* Edit / delete buttons: shown at the right of a card once it is red (double-click or right-click) */
+.card__actions {
   position: absolute;
-  top: -6px; right: -6px;
-  width: 20px; height: 20px;
-  background: var(--f-danger);
-  color: #fff;
-  border-radius: 50%;
+  top: 0; bottom: 0; right: 8px;
+  height: 24px; margin: auto 0;
   display: none;
   align-items: center;
-  justify-content: center;
-  font-size: 11px;
-  cursor: pointer;
-  z-index: 5;
-  box-shadow: var(--f-shadow4);
-  animation: delete-btn-pop .2s var(--f-ease);
-  border: none;
+  gap: 6px;
+  z-index: 6;
 }
-@keyframes delete-btn-pop { from { transform: scale(0); } to { transform: scale(1); } }
-.card.delete-mode .card__delete-btn { display: flex; }
+.card.delete-mode .card__actions { display: flex; animation: delete-btn-pop .2s var(--f-ease); }
+.card.delete-mode { padding-right: 70px; }
+.card--archive.delete-mode,
+.card--done.delete-mode { padding-right: 66px; }
 
-/* Edit mode */
-.card--editing { outline: 2px solid var(--f-brand) !important; outline-offset: 1px; }
-.card--editing .card__delete-btn,
-.card__delete-btn.visible { display: flex !important; z-index: 10; }
-.card:hover .card__delete-btn { display: none !important; }
+.card__edit-btn,
+.card__delete-btn {
+  width: 24px; height: 24px;
+  padding: 0; border: none;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  color: #fff;
+  font-size: 11px; line-height: 1;
+  cursor: pointer;
+  box-shadow: var(--f-shadow4);
+  transition: transform var(--f-fast), filter var(--f-fast);
+}
+.card__edit-btn   { background: var(--f-brand); }
+.card__delete-btn { background: var(--f-danger); }
+.card__edit-btn svg { width: 12px; height: 12px; }
+.card__edit-btn:hover,
+.card__delete-btn:hover { transform: scale(1.12); filter: brightness(1.08); }
+@keyframes delete-btn-pop { from { transform: scale(.6); opacity: 0; } to { transform: scale(1); opacity: 1; } }
 
 .card__title-input {
   width: 100%;
@@ -847,10 +907,6 @@ body.dragging-active .shelf--done    .drop-overlay { display: flex; }
 .card--done:hover { background: var(--f-bg2); box-shadow: var(--f-shadow2); }
 .card--archive::before, .card--done::before { display: none; }
 
-.card--archive .card__delete-btn,
-.card--done    .card__delete-btn { display: none; }
-.card--archive.delete-mode .card__delete-btn,
-.card--done.delete-mode    .card__delete-btn { display: flex; }
 
 .card__title-compact {
   font-size: .75rem;
@@ -970,6 +1026,7 @@ body.done-expanded .fab { bottom: calc(300px + 24px); }
 
 .modal__body { padding: 16px; display: flex; flex-direction: column; gap: 14px; }
 .modal__field { display: flex; flex-direction: column; gap: 5px; }
+.modal__field[hidden] { display: none; }
 
 .modal__label { font-size: .6875rem; font-weight: 600; color: var(--f-fg2); }
 

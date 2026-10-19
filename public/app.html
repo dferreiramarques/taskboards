@@ -197,7 +197,7 @@
   <div id="modal-overlay" class="modal-overlay hidden">
     <div class="modal" id="modal">
       <div class="modal__header">
-        <span class="modal__title">NEW CARD</span>
+        <span class="modal__title" id="modal-title">NEW CARD</span>
         <button class="modal__close" id="modal-close">✕</button>
       </div>
       <div class="modal__body">
@@ -215,8 +215,8 @@
           <label class="modal__label" for="input-date">DUE DATE</label>
           <input class="modal__input modal__input--date" id="input-date" type="date" />
         </div>
-        <div class="modal__field">
-          <label class="modal__label">STARTING COLUMN</label>
+        <div class="modal__field" id="modal-col-field">
+          <label class="modal__label" id="modal-col-label">STARTING COLUMN</label>
           <div class="modal__toggle">
             <button class="modal__toggle-btn active" data-col="todo">TO DO</button>
             <button class="modal__toggle-btn" data-col="inprogress">IN PROGRESS</button>
@@ -259,7 +259,7 @@
         <div class="help__section">
           <div class="help__row">
             <span class="help__icon">⊞</span>
-            <div><strong>Multiple boards</strong> — Click <strong>+</strong> in the boards bar to add a board. Double-click a tab to rename it. Use <strong>‹ ›</strong> to paginate when you have many boards.</div>
+            <div><strong>Multiple boards</strong> — Click <strong>+</strong> in the boards bar to add a board. Double-click a tab to rename it, drag it to reorder, and right-click it to change its colour. Use <strong>‹ ›</strong> to paginate when you have many boards.</div>
           </div>
           <div class="help__row">
             <span class="help__icon">☁</span>
@@ -271,7 +271,7 @@
           </div>
           <div class="help__row">
             <span class="help__icon" style="color:#ef4444">✕</span>
-            <div><strong>Delete a card</strong> — Double-click on a card. A red ✕ badge appears — click it to delete. Click elsewhere to cancel.</div>
+            <div><strong>Edit or delete a card</strong> — Double-click or right-click a card. It turns red and shows ✎ (edit) and ✕ (delete) on the right. Click elsewhere to cancel.</div>
           </div>
         </div>
         <div class="help__divider"></div>

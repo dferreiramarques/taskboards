@@ -1057,7 +1057,9 @@ function cleanBoards(raw) {
     boardIds.add(id);
     const cards = TBShare.cleanCards(b.cards, uid);
     const name = typeof b.name === 'string' && b.name.trim() ? b.name.trim() : `Board ${i + 1}`;
-    return { id, name, cards, createdAt: Number(b.createdAt) || Date.now() };
+    const board = { id, name, cards, createdAt: Number(b.createdAt) || Date.now() };
+    if (HEX_COLOR.test(b.color)) board.color = b.color;
+    return board;
   });
 }
 
@@ -1565,6 +1567,10 @@ const PICO8 = [
 ];
 const TAB_COLORS = ['#ff004d','#ffa300','#00e436','#29adff','#83769c','#ff77a8','#ffccaa','#ab5236','#00b543','#7e2553','#008751','#c2c3c7'];
 
+// A board's own colour (right-click its tab), else a stable one derived from its id
+const HEX_COLOR = /^#[0-9a-f]{6}$/i;
+const boardColor = board => (HEX_COLOR.test(board?.color) ? board.color : tabColor(board.id));
+
 function tabColor(boardId) {
   // Stable color per board based on its id
   let hash = 0;
@@ -1629,7 +1635,8 @@ function renderTabs() {
     const tab = document.createElement('div');
     tab.className = 'board-tab' + (board.id === currentBoardId ? ' active' : '');
     tab.dataset.id = board.id;
-    tab.style.setProperty('--tab-color', tabColor(board.id));
+    tab.style.setProperty('--tab-color', boardColor(board));
+    if (tabDrag?.active && tabDrag.id === board.id) tab.classList.add('dragging-source');
     tab.innerHTML = `
       <button class="board-tab__share" title="${board.share ? 'Public (read-only) — click for share details' : 'Private — click to share'}" aria-label="${board.share ? 'Public board — share details' : 'Private board — share'}">${board.share ? '🚀' : '🔒'}</button>
       <span class="board-tab__name">${esc(board.name)}</span>
@@ -1638,11 +1645,22 @@ function renderTabs() {
 
     // Click to switch
     tab.addEventListener('click', e => {
+      if (Date.now() < suppressTabClickUntil) return;   // a drag / long-press just ended on this tab
       if (e.target.closest('.board-tab__delete')) return;
       if (e.target.closest('.board-tab__share')) return;
       if (e.target.closest('.board-tab__name-input')) return;
       switchBoard(board.id);
     });
+
+    // Right-click (or long-press on touch): pick the board's colour
+    tab.addEventListener('contextmenu', e => {
+      if (e.target.closest('.board-tab__name-input')) return;   // keep the normal menu while renaming
+      e.preventDefault();
+      openColorMenu(board, e.clientX, e.clientY);
+    });
+
+    // Drag to reorder
+    tab.addEventListener('pointerdown', e => onTabPointerDown(e, board, tab));
 
     // Lock / rocket: open the share dialog for THIS board
     tab.querySelector('.board-tab__share').addEventListener('click', e => {
@@ -1672,6 +1690,208 @@ function renderTabs() {
   nextBtn.disabled = tabPage >= totalPages - 1;
   prevBtn.style.visibility = multiPage ? '' : 'hidden';
   nextBtn.style.visibility = multiPage ? '' : 'hidden';
+}
+
+// ─── BOARD COLOUR MENU ───────────────────────────────────────────────────────
+let colorMenuEl = null;
+function closeColorMenu() {
+  colorMenuEl?.remove();
+  colorMenuEl = null;
+  document.removeEventListener('pointerdown', onColorMenuOutside, true);
+  document.removeEventListener('keydown', onColorMenuKey, true);
+  window.removeEventListener('resize', closeColorMenu);
+}
+function onColorMenuOutside(e) { if (colorMenuEl && !colorMenuEl.contains(e.target)) closeColorMenu(); }
+function onColorMenuKey(e) { if (e.key === 'Escape') { e.stopPropagation(); closeColorMenu(); } }
+
+function setBoardColor(boardId, color) {
+  const b = boards.find(b => b.id === boardId);
+  if (!b) return;
+  if (color && HEX_COLOR.test(color)) b.color = color; else delete b.color;   // no colour = back to automatic
+  onDataChanged();
+  renderTabs();
+}
+
+function openColorMenu(board, x, y) {
+  closeColorMenu();
+  const current = boardColor(board).toLowerCase();
+  const menu = document.createElement('div');
+  menu.className = 'color-menu';
+  menu.setAttribute('role', 'dialog');
+  menu.setAttribute('aria-label', 'Board colour');
+  menu.innerHTML = `
+    <div class="color-menu__title">Board colour</div>
+    <div class="color-menu__grid">${TAB_COLORS.map(c =>
+      `<button type="button" class="color-menu__sw${c.toLowerCase() === current ? ' active' : ''}" data-color="${c}" style="background:${c}" aria-label="Colour ${c}"></button>`).join('')}</div>
+    <div class="color-menu__row">
+      <label class="color-menu__custom">Custom <input type="color" value="${current}" aria-label="Custom colour"></label>
+      <button type="button" class="color-menu__auto" data-color="">Auto</button>
+    </div>`;
+  document.body.appendChild(menu);
+  colorMenuEl = menu;
+
+  // keep it on screen
+  const r = menu.getBoundingClientRect();
+  menu.style.left = Math.max(8, Math.min(x, window.innerWidth  - r.width  - 8)) + 'px';
+  menu.style.top  = Math.max(8, Math.min(y, window.innerHeight - r.height - 8)) + 'px';
+
+  menu.addEventListener('click', e => {
+    const btn = e.target.closest('[data-color]');
+    if (!btn) return;
+    setBoardColor(board.id, btn.dataset.color || null);
+    closeColorMenu();
+  });
+  menu.querySelector('input[type=color]').addEventListener('change', e => {
+    setBoardColor(board.id, e.target.value);
+    closeColorMenu();
+  });
+  document.addEventListener('pointerdown', onColorMenuOutside, true);
+  document.addEventListener('keydown', onColorMenuKey, true);
+  window.addEventListener('resize', closeColorMenu);
+}
+
+// ─── BOARD TABS: DRAG TO REORDER ─────────────────────────────────────────────
+// Pointer-based (so it works with mouse and touch). Hover over ‹ › while dragging to reach
+// another page of tabs. A long-press on touch opens the colour menu, like right-click.
+let tabDrag = null;
+let suppressTabClickUntil = 0;
+
+function onTabPointerDown(e, board, tabEl) {
+  if (e.pointerType === 'mouse' && e.button !== 0) return;
+  if (e.target.closest('button, input')) return;
+  tabDrag = { id: board.id, tabEl, startX: e.clientX, startY: e.clientY, active: false, insertIdx: null };
+  if (e.pointerType === 'touch') {
+    tabDrag.pressTimer = setTimeout(() => {
+      if (!tabDrag || tabDrag.active) return;
+      const { startX, startY } = tabDrag;
+      endTabDrag();
+      suppressTabClickUntil = Date.now() + 500;
+      openColorMenu(board, startX, startY);
+    }, 550);
+  }
+  document.addEventListener('pointermove', onTabPointerMove);
+  document.addEventListener('pointerup', onTabPointerUp);
+  document.addEventListener('pointercancel', onTabPointerUp);
+}
+
+function onTabPointerMove(e) {
+  const d = tabDrag;
+  if (!d) return;
+  if (!d.active) {
+    if (Math.hypot(e.clientX - d.startX, e.clientY - d.startY) < 6) return;
+    clearTimeout(d.pressTimer);
+    if (boards.length < 2) { endTabDrag(); return; }
+    d.active = true;
+    const r = d.tabEl.getBoundingClientRect();
+    d.grabDX = d.startX - r.left;
+    d.ghost = d.tabEl.cloneNode(true);
+    d.ghost.classList.add('tab-drag-ghost');
+    d.ghost.style.width = r.width + 'px';
+    d.ghost.style.height = r.height + 'px';
+    document.body.appendChild(d.ghost);
+    d.marker = document.createElement('div');
+    d.marker.className = 'tab-drop-marker';
+    document.body.appendChild(d.marker);
+    d.tabEl.classList.add('dragging-source');
+    document.body.classList.add('tab-dragging');
+  }
+  e.preventDefault();
+  d.ghost.style.left = (e.clientX - d.grabDX) + 'px';
+  d.ghost.style.top  = (d.tabEl.isConnected ? d.tabEl.getBoundingClientRect().top : q('#boards-tabs').getBoundingClientRect().top) + 'px';
+  updateTabDropTarget(e);
+  autoFlipTabPage(e);
+}
+
+// Where would the dragged board land? (index in the list without the dragged board)
+function updateTabDropTarget(e) {
+  const d = tabDrag;
+  const bar = q('#boards-tabs').getBoundingClientRect();
+  const others = [...document.querySelectorAll('#boards-tabs .board-tab')].filter(t => t.dataset.id !== d.id);
+  const rest = boards.filter(b => b.id !== d.id);
+  const inBar = e.clientY > bar.top - 50 && e.clientY < bar.bottom + 50;   // drop far away = cancel
+
+  if (!inBar) { d.insertIdx = null; d.marker.style.display = 'none'; return; }
+  if (!others.length) {
+    d.insertIdx = boards.findIndex(b => b.id === d.id);
+    d.marker.style.display = 'none';
+    return;
+  }
+  let k = 0;
+  while (k < others.length) {
+    const r = others[k].getBoundingClientRect();
+    if (e.clientX < r.left + r.width / 2) break;
+    k++;
+  }
+  const ref = k < others.length ? others[k] : others[others.length - 1];
+  const idxOfRef = rest.findIndex(b => b.id === ref.dataset.id);
+  d.insertIdx = k < others.length ? idxOfRef : idxOfRef + 1;
+
+  const rr = ref.getBoundingClientRect();
+  d.marker.style.left    = ((k < others.length ? rr.left : rr.right) - 5) + 'px';
+  d.marker.style.top     = rr.top + 'px';
+  d.marker.style.height  = rr.height + 'px';
+  d.marker.style.display = 'block';
+}
+
+// Hovering ‹ › while dragging turns the page, so a board can travel past the visible tabs
+function autoFlipTabPage(e) {
+  const d = tabDrag;
+  const dir = [['#tab-prev', -1], ['#tab-next', 1]].find(([sel]) => {
+    const b = q(sel), r = b?.getBoundingClientRect();
+    return b && !b.disabled && r.width && e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom;
+  })?.[1];
+  if (!dir) { clearTimeout(d.flipTimer); d.flipTimer = null; d.flipDir = 0; return; }
+  if (d.flipDir === dir) return;
+  d.flipDir = dir;
+  clearTimeout(d.flipTimer);
+  const flip = () => {
+    if (!tabDrag || tabDrag.flipDir !== dir) return;
+    const pages = Math.ceil(boards.length / dynamicTabsPerPage);
+    const next = Math.max(0, Math.min(tabPage + dir, pages - 1));
+    if (next === tabPage) return;
+    tabPage = next;
+    renderTabs();
+    d.tabEl = document.querySelector(`#boards-tabs .board-tab[data-id="${d.id}"]`) || d.tabEl;
+    tabDrag.flipTimer = setTimeout(flip, 650);
+  };
+  d.flipTimer = setTimeout(flip, 450);
+}
+
+function endTabDrag() {
+  const d = tabDrag;
+  if (!d) return;
+  clearTimeout(d.pressTimer);
+  clearTimeout(d.flipTimer);
+  d.ghost?.remove();
+  d.marker?.remove();
+  document.body.classList.remove('tab-dragging');
+  document.querySelectorAll('.board-tab.dragging-source').forEach(t => t.classList.remove('dragging-source'));
+  document.removeEventListener('pointermove', onTabPointerMove);
+  document.removeEventListener('pointerup', onTabPointerUp);
+  document.removeEventListener('pointercancel', onTabPointerUp);
+  tabDrag = null;
+}
+
+function onTabPointerUp(e) {
+  const d = tabDrag;
+  if (!d) return;
+  const commit = d.active && e.type === 'pointerup' && d.insertIdx != null;
+  const { id, insertIdx, active } = d;
+  endTabDrag();
+  if (active) suppressTabClickUntil = Date.now() + 400;   // the drop must not also switch boards
+  if (commit) reorderBoard(id, insertIdx);
+}
+
+function reorderBoard(id, toIndex) {
+  const from = boards.findIndex(b => b.id === id);
+  if (from < 0) return;
+  const [moved] = boards.splice(from, 1);
+  const to = Math.max(0, Math.min(toIndex, boards.length));
+  boards.splice(to, 0, moved);
+  if (to === from) { renderTabs(); return; }
+  tabPage = Math.floor(to / dynamicTabsPerPage);
+  onDataChanged();
+  renderTabs();
 }
 
 function startRename(tab, boardId, nameEl) {
@@ -1757,20 +1977,26 @@ function renderZone(containerId, zoneCards, compact) {
   zoneCards.forEach(card => c.appendChild(buildCardEl(card, compact)));
 }
 
+// Shown at the right of a card once it is red (double-click / right-click)
+const ACTIONS_MARKUP = `<div class="card__actions" tabindex="-1">
+        <button type="button" class="card__edit-btn" title="Edit card" aria-label="Edit card"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button>
+        <button type="button" class="card__delete-btn" title="Delete card" aria-label="Delete card">✕</button>
+      </div>`;
+
 function buildCardEl(card, compact) {
   const el = document.createElement('div');
   el.className = `card card--${card.status}`;
   el.dataset.id = card.id;
   if (compact) {
     el.innerHTML = `
-      <div class="card__delete-btn" tabindex="-1">✕</div>
+      ${ACTIONS_MARKUP}
       <span class="card__title-compact">${esc(card.title)}</span>
       ${card.owner ? `<span class="card__owner-compact">${esc(card.owner)}</span>` : ''}
     `;
   } else {
     const dc = getDateCls(card.dueDate);
     el.innerHTML = `
-      <div class="card__delete-btn" tabindex="-1">✕</div>
+      ${ACTIONS_MARKUP}
       <h3 class="card__title">${esc(card.title)}</h3>
       <div class="card__meta">
         ${card.owner ? `<span class="card__owner">${esc(card.owner)}</span>` : '<span></span>'}
@@ -1788,29 +2014,41 @@ function buildCardEl(card, compact) {
 function attachCardEvents(el) {
   el.addEventListener('pointerdown', onCardDown, {passive:false});
   el.addEventListener('dblclick', onCardDblClick);
+  el.addEventListener('contextmenu', onCardContext);
 
-  el.querySelector('.card__delete-btn').addEventListener('pointerdown', e=>e.stopPropagation());
+  const actions = el.querySelector('.card__actions');
+  actions.addEventListener('pointerdown', e => e.stopPropagation());
+  actions.addEventListener('dblclick', e => e.stopPropagation());
+  actions.addEventListener('contextmenu', e => e.stopPropagation());
   el.querySelector('.card__delete-btn').addEventListener('click', e => {
     e.stopPropagation();
     if (deleteCardId === el.dataset.id) deleteCard(el.dataset.id);
   });
+  el.querySelector('.card__edit-btn').addEventListener('click', e => {
+    e.stopPropagation();
+    openEditModal(el.dataset.id);
+  });
 }
 
+// Double-click or right-click: the card turns red and shows ✎ edit and ✕ delete
+function armCard(id) {
+  if (deleteCardId === id) return;
+  if (deleteCardId) dismissDelete();
+  activateDelete(id);
+}
 function onCardDblClick(e) {
-  if (e.target.closest('.card__delete-btn')) return;
-  const cardEl = e.currentTarget;
-  const id = cardEl.dataset.id;
-  
-  if (deleteCardId === id) {
-    deleteCard(id);
-  } else {
-    if (deleteCardId) dismissDelete();
-    activateDelete(id);
-  }
+  if (e.target.closest('.card__actions')) return;
+  armCard(e.currentTarget.dataset.id);
+}
+function onCardContext(e) {
+  e.preventDefault();
+  closeColorMenu();
+  armCard(e.currentTarget.dataset.id);
 }
 
 function onCardDown(e) {
-  if (e.target.closest('.card__delete-btn'))  return;
+  if (e.target.closest('.card__actions'))  return;
+  if (e.button === 2) return;   // right-click arms the card, it must not start a drag
   const cardEl = e.currentTarget, id = cardEl.dataset.id;
   if (deleteCardId && deleteCardId !== id) { dismissDelete(); return; }
   if (deleteCardId === id) return;
@@ -1979,7 +2217,7 @@ q('#done-toggle').addEventListener('click', () => {
 });
 
 // ─── CARD MODAL ───────────────────────────────────────────────────────────────
-q('#fab').addEventListener('click', openModal);
+q('#fab').addEventListener('click', () => openModal());
 q('#modal-close').addEventListener('click', closeModal);
 q('#modal-overlay').addEventListener('click', e=>{ if(e.target===q('#modal-overlay')) closeModal(); });
 q('#modal').querySelectorAll('.modal__toggle-btn').forEach(btn=>{
@@ -1991,20 +2229,73 @@ q('#modal').querySelectorAll('.modal__toggle-btn').forEach(btn=>{
 q('#modal-submit').addEventListener('click', submitCard);
 q('#input-title').addEventListener('keydown', e=>{ if(e.key==='Enter') submitCard(); if(e.key==='Escape') closeModal(); });
 
+let editingCardId = null;   // set while the card modal is editing an existing card
+
+function setModalMode(editing) {
+  q('#modal-title').textContent  = editing ? 'EDIT CARD' : 'NEW CARD';
+  q('#modal-submit').textContent = editing ? 'SAVE CHANGES →' : 'CREATE CARD →';
+  q('#modal-col-label').textContent = editing ? 'COLUMN' : 'STARTING COLUMN';
+}
+function syncColumnToggle() {
+  q('#modal').querySelectorAll('.modal__toggle-btn').forEach(b => b.classList.toggle('active', b.dataset.col === selectedColumn));
+}
+
 function openModal() {
+  editingCardId = null;
+  setModalMode(false);
+  q('#modal-col-field').hidden = false;
   q('#modal-overlay').classList.remove('hidden');
   q('#input-title').value=''; q('#input-owner').value=''; q('#input-date').value='';
   selectedColumn='todo';
-  q('#modal').querySelectorAll('.modal__toggle-btn').forEach(b=>b.classList.remove('active'));
-  q('[data-col="todo"]').classList.add('active');
+  syncColumnToggle();
   refreshOwnerUI();
   setTimeout(()=>q('#input-title').focus(), 80);
 }
-function closeModal() { q('#modal-overlay').classList.add('hidden'); }
+
+// Same form as "new card", filled in with the card's current values
+function openEditModal(id) {
+  const card = currentCards().find(c => c.id === id);
+  if (!card) return;
+  dismissDelete();
+  editingCardId = id;
+  setModalMode(true);
+  q('#modal-overlay').classList.remove('hidden');
+  q('#input-title').value = card.title;
+  q('#input-owner').value = card.owner || '';
+  q('#input-date').value  = card.dueDate || '';
+  // Only To Do / In Progress can be switched here; Archive and Done cards keep their place
+  const movable = card.status === 'todo' || card.status === 'inprogress';
+  q('#modal-col-field').hidden = !movable;
+  selectedColumn = card.status;
+  syncColumnToggle();
+  refreshOwnerUI();
+  setTimeout(() => { const t = q('#input-title'); t.focus(); t.select(); }, 80);
+}
+
+function closeModal() { q('#modal-overlay').classList.add('hidden'); editingCardId = null; }
+
+function updateCard(id, { title, owner, dueDate, status }) {
+  const card = currentCards().find(c => c.id === id);
+  if (!card) return;
+  card.title   = title.trim();
+  card.owner   = owner.trim();
+  card.dueDate = dueDate;
+  const movable = card.status === 'todo' || card.status === 'inprogress';
+  if (movable && status !== card.status) {
+    moveOrReorderCard(id, status, null);   // joins the end of the other column (also saves + re-renders)
+  } else {
+    onDataChanged();
+    renderBoard();
+  }
+  renderOwnerFilterChips();
+  showToast('Card updated', 'success');
+}
+
 function submitCard() {
   const title=q('#input-title').value.trim();
   if (!title) { shakeEl(q('#input-title')); return; }
-  createCard(title, q('#input-owner').value, q('#input-date').value, selectedColumn);
+  if (editingCardId) updateCard(editingCardId, { title, owner: q('#input-owner').value, dueDate: q('#input-date').value, status: selectedColumn });
+  else createCard(title, q('#input-owner').value, q('#input-date').value, selectedColumn);
   closeModal();
 }
 function shakeEl(el) { el.style.animation='none'; requestAnimationFrame(()=>{ el.style.animation='delete-shake .35s ease'; }); }
