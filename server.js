@@ -9,12 +9,6 @@ app.set('trust proxy', 1);   // behind Render's proxy: real client IP + https
 
 app.use('/auth', auth.router);
 
-// The roadmap is public data that other sites read (see roadmap-embed.js): allow it cross-origin, never stale
-app.use('/roadmap.json', (req, res, next) => {
-  res.set({ 'Access-Control-Allow-Origin': '*', 'Cache-Control': 'no-cache' });
-  next();
-});
-
 app.use(express.static(path.join(__dirname, 'public'), {
   setHeaders: (res, filePath) => {
     if (filePath.endsWith('sw.js')) {
