@@ -1477,10 +1477,11 @@ function renameBoard(id, name) {
 }
 
 // ─── CARD CRUD ────────────────────────────────────────────────────────────────
-function createCard(title, owner, dueDate, status) {
+function createCard(title, owner, dueDate, status, note = '') {
   const zoneCards = currentBoard().cards.filter(c => c.status === status);
   const maxOrder  = zoneCards.reduce((m, c) => Math.max(m, c.sortOrder ?? c.createdAt), -1);
   const card = { id: uid(), title: title.trim(), owner: owner.trim(), dueDate, status, createdAt: Date.now(), sortOrder: maxOrder + 1 };
+  if (note.trim()) card.note = note.trim();
   currentBoard().cards.push(card);
   onDataChanged();
   renderOwnerFilterChips();
@@ -1995,6 +1996,9 @@ const ACTIONS_MARKUP = `<div class="card__actions" tabindex="-1">
         <button type="button" class="card__delete-btn" title="Delete card" aria-label="Delete card">✕</button>
       </div>`;
 
+// 🗒 at the bottom right of a card that has a note; click it to read the note
+const NOTE_BTN_MARKUP = `<button type="button" class="card__note-btn" title="Show note" aria-label="Show note" aria-expanded="false">🗒️</button>`;
+
 function buildCardEl(card, compact) {
   const el = document.createElement('div');
   el.className = `card card--${card.status}`;
@@ -2004,6 +2008,7 @@ function buildCardEl(card, compact) {
       ${ACTIONS_MARKUP}
       <span class="card__title-compact">${esc(card.title)}</span>
       ${card.owner ? `<span class="card__owner-compact">${esc(card.owner)}</span>` : ''}
+      ${card.note ? NOTE_BTN_MARKUP : ''}
     `;
   } else {
     const dc = getDateCls(card.dueDate);
@@ -2012,7 +2017,10 @@ function buildCardEl(card, compact) {
       <h3 class="card__title">${esc(card.title)}</h3>
       <div class="card__meta">
         ${card.owner ? `<span class="card__owner">${esc(card.owner)}</span>` : '<span></span>'}
-        ${card.dueDate ? `<span class="card__date ${dc}">${fmtDate(card.dueDate)}</span>` : ''}
+        <span class="card__meta-end">
+          ${card.dueDate ? `<span class="card__date ${dc}">${fmtDate(card.dueDate)}</span>` : ''}
+          ${card.note ? NOTE_BTN_MARKUP : ''}
+        </span>
       </div>
     `;
   }
@@ -2040,7 +2048,50 @@ function attachCardEvents(el) {
     e.stopPropagation();
     openEditModal(el.dataset.id);
   });
+  const noteBtn = el.querySelector('.card__note-btn');
+  if (noteBtn) {
+    noteBtn.addEventListener('pointerdown', e => e.stopPropagation());   // must not start a drag
+    noteBtn.addEventListener('dblclick', e => e.stopPropagation());
+    noteBtn.addEventListener('click', e => {
+      e.stopPropagation();
+      toggleNoteTip(noteBtn, el.dataset.id);
+    });
+  }
 }
+
+// ─── NOTE TOOLTIP ────────────────────────────────────────────────────────────
+let noteTip = null;   // { el, btn, id } while a card's note is open
+function toggleNoteTip(btn, id) {
+  const open = noteTip && noteTip.id === id;
+  closeNoteTip();
+  if (open) return;
+  const card = currentCards().find(c => c.id === id);
+  if (!card?.note) return;
+  const tip = document.createElement('div');
+  tip.className = 'note-tip';
+  tip.setAttribute('role', 'tooltip');
+  tip.textContent = card.note;
+  document.body.appendChild(tip);
+  // Above the 🗒, right-aligned with it; below when there is no room above
+  const r = btn.getBoundingClientRect(), t = tip.getBoundingClientRect();
+  const left = Math.max(8, Math.min(r.right - t.width, innerWidth - t.width - 8));
+  const top  = r.top - t.height - 6 >= 8 ? r.top - t.height - 6 : r.bottom + 6;
+  tip.style.left = `${left}px`;
+  tip.style.top  = `${top}px`;
+  btn.setAttribute('aria-expanded', 'true');
+  noteTip = { el: tip, btn, id };
+}
+function closeNoteTip() {
+  if (!noteTip) return;
+  noteTip.el.remove();
+  noteTip.btn.setAttribute('aria-expanded', 'false');
+  noteTip = null;
+}
+document.addEventListener('pointerdown', e => {
+  if (noteTip && !e.target.closest('.note-tip, .card__note-btn')) closeNoteTip();
+});
+addEventListener('resize', closeNoteTip);
+document.addEventListener('scroll', closeNoteTip, true);
 
 // Double-click (desktop), long-press (touch) or right-click: the card turns red and shows ✎ edit and ✕ delete
 const LONG_PRESS_MS = 500;
@@ -2295,6 +2346,11 @@ q('#modal').querySelectorAll('.modal__toggle-btn').forEach(btn=>{
   });
 });
 q('#modal-submit').addEventListener('click', submitCard);
+q('#note-toggle').addEventListener('click', () => {
+  const show = q('#input-note').hidden;
+  showNoteField(show);
+  if (show) q('#input-note').focus();
+});
 q('#input-title').addEventListener('keydown', e=>{ if(e.key==='Enter') submitCard(); if(e.key==='Escape') closeModal(); });
 
 let editingCardId = null;   // set while the card modal is editing an existing card
@@ -2314,6 +2370,7 @@ function openModal() {
   q('#modal-col-field').hidden = false;
   q('#modal-overlay').classList.remove('hidden');
   q('#input-title').value=''; q('#input-owner').value=''; q('#input-date').value='';
+  setNoteField('');
   selectedColumn='todo';
   syncColumnToggle();
   refreshOwnerUI();
@@ -2331,6 +2388,7 @@ function openEditModal(id) {
   q('#input-title').value = card.title;
   q('#input-owner').value = card.owner || '';
   q('#input-date').value  = card.dueDate || '';
+  setNoteField(card.note || '');
   // Only To Do / In Progress can be switched here; Archive and Done cards keep their place
   const movable = card.status === 'todo' || card.status === 'inprogress';
   q('#modal-col-field').hidden = !movable;
@@ -2340,14 +2398,26 @@ function openEditModal(id) {
   setTimeout(() => { const t = q('#input-title'); t.focus(); t.select(); }, 80);
 }
 
+// The note textarea stays folded behind the 🗒 button until it is opened or the card has a note
+function setNoteField(note) {
+  q('#input-note').value = note;
+  showNoteField(!!note);
+}
+function showNoteField(show) {
+  q('#input-note').hidden = !show;
+  q('#note-toggle').setAttribute('aria-expanded', String(show));
+  q('#note-toggle-label').textContent = show ? 'NOTE' : 'ADD NOTE';
+}
+
 function closeModal() { q('#modal-overlay').classList.add('hidden'); editingCardId = null; }
 
-function updateCard(id, { title, owner, dueDate, status }) {
+function updateCard(id, { title, owner, dueDate, note, status }) {
   const card = currentCards().find(c => c.id === id);
   if (!card) return;
   card.title   = title.trim();
   card.owner   = owner.trim();
   card.dueDate = dueDate;
+  if (note.trim()) card.note = note.trim(); else delete card.note;
   const movable = card.status === 'todo' || card.status === 'inprogress';
   if (movable && status !== card.status) {
     moveOrReorderCard(id, status, null);   // joins the end of the other column (also saves + re-renders)
@@ -2362,8 +2432,9 @@ function updateCard(id, { title, owner, dueDate, status }) {
 function submitCard() {
   const title=q('#input-title').value.trim();
   if (!title) { shakeEl(q('#input-title')); return; }
-  if (editingCardId) updateCard(editingCardId, { title, owner: q('#input-owner').value, dueDate: q('#input-date').value, status: selectedColumn });
-  else createCard(title, q('#input-owner').value, q('#input-date').value, selectedColumn);
+  const note = q('#input-note').value;
+  if (editingCardId) updateCard(editingCardId, { title, owner: q('#input-owner').value, dueDate: q('#input-date').value, note, status: selectedColumn });
+  else createCard(title, q('#input-owner').value, q('#input-date').value, selectedColumn, note);
   closeModal();
 }
 function shakeEl(el) { el.style.animation='none'; requestAnimationFrame(()=>{ el.style.animation='delete-shake .35s ease'; }); }
@@ -2446,6 +2517,7 @@ setInterval(spawnParticle, 3000);
 // ─── KEYBOARD ────────────────────────────────────────────────────────────────
 document.addEventListener('keydown', e=>{
   if (e.key==='Escape') {
+    if (noteTip) { closeNoteTip(); return; }
     if (!q('#modal-overlay').classList.contains('hidden'))  { closeModal(); return; }
     if (!q('#help-overlay').classList.contains('hidden'))   { q('#help-overlay').classList.add('hidden'); return; }
     dismissDelete();

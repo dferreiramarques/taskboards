@@ -894,7 +894,31 @@ body.dragging-active .shelf--done    .drop-overlay { display: flex; }
   border: 1px solid color-mix(in srgb, var(--f-brand) 20%, transparent);
 }
 
+.card__meta-end { display: inline-flex; align-items: center; gap: 6px; margin-left: auto; }
 .card__date      { font-size: .6875rem; color: var(--f-fg3); }
+.card__note-btn {
+  background: none; border: none; padding: 0 2px; color: var(--f-fg2);
+  font-size: .8125rem; line-height: 1;
+  cursor: pointer; opacity: .75;
+  transition: opacity var(--f-fast), transform var(--f-fast);
+}
+.card__note-btn:hover, .card__note-btn[aria-expanded="true"] { opacity: 1; transform: scale(1.15); }
+.card__title-compact + .card__note-btn, .card__owner-compact + .card__note-btn { margin-left: 6px; flex-shrink: 0; }
+.card.delete-mode .card__note-btn { display: none; }
+
+.note-tip {
+  position: fixed; z-index: 10000;
+  max-width: min(280px, calc(100vw - 16px));
+  background: var(--f-bg1);
+  color: var(--f-fg1);
+  border: 1px solid var(--f-stroke1);
+  border-radius: var(--f-r4);
+  box-shadow: var(--f-shadow8);
+  padding: 8px 10px;
+  font-size: .8125rem; line-height: 1.4;
+  white-space: pre-wrap; overflow-wrap: anywhere;
+  animation: card-pop .15s var(--f-ease);
+}
 .card__date.overdue { color: var(--f-danger); font-weight: 600; }
 .card__date.soon    { color: var(--f-warning); }
 
@@ -1060,6 +1084,17 @@ body.done-expanded .fab { bottom: calc(300px + 24px); }
 .modal__input:focus { border-color: var(--f-brand); box-shadow: 0 0 0 1px var(--f-brand); }
 .modal__input::placeholder { color: var(--f-fg4); }
 .modal__input--date { color-scheme: dark; }
+.modal__textarea { resize: vertical; min-height: 64px; line-height: 1.4; }
+.modal__textarea[hidden] { display: none; }
+.note-toggle {
+  align-self: flex-start;
+  background: none; border: 1px dashed var(--f-stroke1); border-radius: var(--f-r4);
+  color: var(--f-fg2); font: inherit; font-size: .6875rem; font-weight: 600;
+  padding: 4px 10px; cursor: pointer;
+  transition: border-color var(--f-fast), color var(--f-fast);
+}
+.note-toggle:hover { border-color: var(--f-fg4); color: var(--f-fg1); }
+.note-toggle[aria-expanded="true"] { border-color: transparent; padding-left: 0; }
 [data-theme="light"] .modal__input--date { color-scheme: light; }
 
 .modal__toggle { display: flex; gap: 4px; }

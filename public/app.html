@@ -217,6 +217,10 @@
           <label class="modal__label" for="input-date">DUE DATE</label>
           <input class="modal__input modal__input--date" id="input-date" type="date" />
         </div>
+        <div class="modal__field">
+          <button type="button" class="note-toggle" id="note-toggle" aria-expanded="false" aria-controls="input-note"><span aria-hidden="true">🗒️</span> <span id="note-toggle-label">ADD NOTE</span></button>
+          <textarea class="modal__input modal__textarea" id="input-note" rows="3" maxlength="500" placeholder="A short note..." hidden></textarea>
+        </div>
         <div class="modal__field" id="modal-col-field">
           <label class="modal__label" id="modal-col-label">STARTING COLUMN</label>
           <div class="modal__toggle">
