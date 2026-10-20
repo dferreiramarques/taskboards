@@ -919,6 +919,8 @@ body.dragging-active .shelf--done    .drop-overlay { display: flex; }
   white-space: pre-wrap; overflow-wrap: anywhere;
   animation: card-pop .15s var(--f-ease);
 }
+.note-tip a { color: var(--f-brand); text-decoration: underline; text-underline-offset: 2px; }
+.note-tip a:hover { text-decoration-thickness: 2px; }
 .card__date.overdue { color: var(--f-danger); font-weight: 600; }
 .card__date.soon    { color: var(--f-warning); }
 

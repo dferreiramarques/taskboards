@@ -2061,6 +2061,26 @@ function attachCardEvents(el) {
 
 // ─── NOTE TOOLTIP ────────────────────────────────────────────────────────────
 let noteTip = null;   // { el, btn, id } while a card's note is open
+
+// Note text as DOM nodes: http(s):// and www. addresses become links that open in a new tab
+const NOTE_URL_RE = /\b(?:https?:\/\/|www\.)[^\s<>"']+/gi;
+function linkifyNote(text) {
+  const nodes = [];
+  let last = 0;
+  for (const m of text.matchAll(NOTE_URL_RE)) {
+    const url = m[0].replace(/[.,;:!?)\]}]+$/, '');   // trailing punctuation belongs to the sentence
+    if (m.index > last) nodes.push(document.createTextNode(text.slice(last, m.index)));
+    const a = document.createElement('a');
+    a.href = /^www\./i.test(url) ? `https://${url}` : url;
+    a.target = '_blank';
+    a.rel = 'noopener noreferrer';
+    a.textContent = url;
+    nodes.push(a);
+    last = m.index + url.length;
+  }
+  if (last < text.length) nodes.push(document.createTextNode(text.slice(last)));
+  return nodes;
+}
 function toggleNoteTip(btn, id) {
   const open = noteTip && noteTip.id === id;
   closeNoteTip();
@@ -2070,7 +2090,8 @@ function toggleNoteTip(btn, id) {
   const tip = document.createElement('div');
   tip.className = 'note-tip';
   tip.setAttribute('role', 'tooltip');
-  tip.textContent = card.note;
+  tip.append(...linkifyNote(card.note));
+  tip.addEventListener('click', e => { if (e.target.closest('a')) closeNoteTip(); });
   document.body.appendChild(tip);
   // Above the 🗒, right-aligned with it; below when there is no room above
   const r = btn.getBoundingClientRect(), t = tip.getBoundingClientRect();
