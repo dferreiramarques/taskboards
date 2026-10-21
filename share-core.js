@@ -99,6 +99,7 @@
           createdAt: Number(c.createdAt) || Date.now()
         };
         if (Number.isFinite(c.sortOrder)) card.sortOrder = c.sortOrder;
+        if (typeof c.note === 'string' && c.note.trim()) card.note = c.note.trim().slice(0, 500);   // same limit as the note field
         return card;
       });
   }
