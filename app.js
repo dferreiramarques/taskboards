@@ -2497,7 +2497,7 @@ q('#done-clear-btn').addEventListener('click', e => { e.stopPropagation(); delet
 // ─── CARD MODAL ───────────────────────────────────────────────────────────────
 q('#fab').addEventListener('click', () => openModal());
 q('#modal-close').addEventListener('click', closeModal);
-q('#modal-overlay').addEventListener('click', e=>{ if(e.target===q('#modal-overlay')) closeModal(); });
+// Clicking outside the card modal doesn't close it — only ✕ (or Esc) and Save/Create do
 q('#modal').querySelectorAll('.modal__toggle-btn').forEach(btn=>{
   btn.addEventListener('click', ()=>{
     q('#modal').querySelectorAll('.modal__toggle-btn').forEach(b=>b.classList.remove('active'));
