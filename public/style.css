@@ -1288,14 +1288,14 @@ kbd {
 
 .auth-gate__mark {
   width: 52px; height: 52px;
-  border-radius: var(--f-r8);
-  background: #0a0a0a;
-  color: var(--f-brand);
+  border-radius: 14px;
+  background: var(--f-brand);
+  color: var(--f-brand-ink);
   display: flex; align-items: center; justify-content: center;
-  font-size: 26px;
   box-shadow: var(--f-shadow8);
   margin-bottom: 4px;
 }
+.auth-gate__mark .ico { width: 30px; height: 30px; }
 
 .auth-gate__title { font-size: 1.3rem; font-weight: 700; color: var(--f-fg1); letter-spacing: -.01em; }
 .auth-gate__sub { font-size: .88rem; color: var(--f-fg3); line-height: 1.55; }
