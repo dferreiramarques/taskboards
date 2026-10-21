@@ -93,6 +93,7 @@
           <div class="user-pill__menu" id="user-menu">
             <div class="user-pill__menu-email" id="user-email-menu"></div>
             <div class="user-pill__menu-divider"></div>
+            <button class="user-pill__menu-item user-pill__menu-item--neutral" id="report-btn">Export board report (.md)</button>
             <button class="user-pill__menu-item user-pill__menu-item--neutral" id="export-btn">Export backup (.json)</button>
             <button class="user-pill__menu-item user-pill__menu-item--neutral" id="import-btn">Import backup…</button>
             <div class="user-pill__menu-divider"></div>
@@ -176,6 +177,10 @@
         <span class="shelf__count" id="done-count">0</span>
       </div>
       <div class="shelf__header-right">
+        <span class="shelf__actions" id="done-actions">
+          <button class="shelf__action" id="done-report-btn" title="Save a .md snapshot of this board, cards grouped by status">Export report</button>
+          <button class="shelf__action shelf__action--danger" id="done-clear-btn">Delete all</button>
+        </span>
         <span class="shelf__hint">click to expand</span>
         <span class="shelf__chevron" id="done-chevron">▴</span>
       </div>

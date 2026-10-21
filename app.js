@@ -1042,14 +1042,7 @@ q('#logout-btn')?.addEventListener('click', handleLogout);
 
 function exportBackup() {
   const data = { app: 'taskboards', version: 1, exportedAt: new Date().toISOString(), boards, currentBoardId };
-  const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }));
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `taskboards-backup-${new Date().toISOString().slice(0, 10)}.json`;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  downloadText(JSON.stringify(data, null, 2), `taskboards-backup-${new Date().toISOString().slice(0, 10)}.json`, 'application/json');
   showToast('Backup downloaded', 'success');
 }
 
@@ -1111,6 +1104,122 @@ q('#import-file')?.addEventListener('change', e => {
   e.target.value = '';   // allow re-importing the same file
   if (file) importBackup(file);
 });
+
+// ─── REPORT: MARKDOWN SNAPSHOT ───────────────────────────────────────────────
+// A readable snapshot of the current board, cards grouped by status — to keep a
+// record of the week's work before clearing Done. Saved to "taskboards_reports"
+// in the root of the user's Drive, or downloaded when Drive can't take it.
+const REPORT_FOLDER   = 'taskboards_reports';
+const LS_REPORT_FID   = 'taskboards-report-folder';
+const REPORT_SECTIONS = [['done', 'Done'], ['inprogress', 'In progress'], ['todo', 'To do'], ['archive', 'Archive']];
+
+const pad2 = n => String(n).padStart(2, '0');
+const mdText = s => String(s || '').replace(/\s+/g, ' ').replace(/([\\`*_[\]<>#|])/g, '\\$1').trim();
+
+function reportFilename(board, d) {
+  const name = board.name.normalize('NFKD').replace(/[̀-ͯ]/g, '')
+    .replace(/[^\w-]+/g, '-').replace(/^-+|-+$/g, '').toLowerCase() || 'board';
+  const date = `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+  const time = `${pad2(d.getHours())}${pad2(d.getMinutes())}${pad2(d.getSeconds())}`;
+  return `taskboards_${name}_${date}_${time}.md`;
+}
+
+function buildReport(board, d) {
+  const sorted = status => board.cards.filter(c => c.status === status)
+    .sort((a, b) => (a.sortOrder ?? a.createdAt) - (b.sortOrder ?? b.createdAt));
+  const stamp = `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())} ${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+  const lines = [
+    `# ${mdText(board.name)}`, '',
+    `Taskboards snapshot · ${stamp}`, '',
+    REPORT_SECTIONS.map(([s, label]) => `${label}: ${sorted(s).length}`).join(' · '), ''
+  ];
+  for (const [status, label] of REPORT_SECTIONS) {
+    const cards = sorted(status);
+    lines.push(`## ${label} (${cards.length})`, '');
+    if (!cards.length) { lines.push('_No cards_', ''); continue; }
+    for (const c of cards) {
+      const meta = [c.owner && `@${mdText(c.owner)}`, c.dueDate && `due ${c.dueDate}`].filter(Boolean).join(' · ');
+      lines.push(`- [${status === 'done' ? 'x' : ' '}] ${mdText(c.title)}${meta ? ` — ${meta}` : ''}`);
+      if (c.note) c.note.split('\n').forEach(l => lines.push(`  > ${l}`));
+    }
+    lines.push('');
+  }
+  return lines.join('\n');
+}
+
+function downloadText(text, filename, type) {
+  const url = URL.createObjectURL(new Blob([text], { type }));
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+// The app only sees Drive folders it created itself (drive.file), so it keeps its own.
+async function reportFolderId() {
+  const cached = lsGet(LS_REPORT_FID);
+  if (cached) {
+    const r = await driveFetch(`${DRIVE_API}/files/${cached}?fields=id,trashed`);
+    if (r.ok && !(await r.json()).trashed) return cached;
+    lsDel(LS_REPORT_FID);
+  }
+  const query = encodeURIComponent(`name='${REPORT_FOLDER}' and mimeType='application/vnd.google-apps.folder' and 'root' in parents and trashed=false`);
+  const found = await driveFetch(`${DRIVE_API}/files?q=${query}&fields=files(id)&spaces=drive`);
+  if (!found.ok) throw new Error(`folder lookup ${found.status}`);
+  let id = (await found.json()).files?.[0]?.id;
+  if (!id) {
+    const r = await driveFetch(`${DRIVE_API}/files?fields=id`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: REPORT_FOLDER, mimeType: 'application/vnd.google-apps.folder', parents: ['root'] })
+    });
+    if (!r.ok) throw new Error(`folder create ${r.status}`);
+    id = (await r.json()).id;
+  }
+  lsSet(LS_REPORT_FID, id);
+  return id;
+}
+
+async function driveSaveReport(text, filename) {
+  const parent = await reportFolderId();
+  const boundary = 'tb' + Math.random().toString(36).slice(2);
+  const body =
+    `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n` +
+    JSON.stringify({ name: filename, mimeType: 'text/markdown', parents: [parent] }) +
+    `\r\n--${boundary}\r\nContent-Type: text/markdown; charset=UTF-8\r\n\r\n${text}\r\n--${boundary}--`;
+  const r = await driveFetch(`${DRIVE_UPLOAD_API}/files?uploadType=multipart&fields=id`, {
+    method: 'POST',
+    headers: { 'Content-Type': `multipart/related; boundary=${boundary}` },
+    body
+  });
+  if (!r.ok) throw new Error(`report upload ${r.status}`);
+}
+
+let reportBusy = false;
+async function exportReport() {
+  const board = currentBoard();
+  if (!board || reportBusy) return;
+  const d = new Date();
+  const text = buildReport(board, d);
+  const filename = reportFilename(board, d);
+  if (driveReady && navigator.onLine && hasShareScope()) {
+    reportBusy = true;
+    try {
+      await driveSaveReport(text, filename);
+      showToast(`Report saved to Drive › ${REPORT_FOLDER}`, 'success');
+      return;
+    } catch (e) {
+      console.warn('report to Drive failed:', e.message);
+    } finally { reportBusy = false; }
+  }
+  downloadText(text, filename, 'text/markdown');
+  showToast('Report downloaded — couldn’t save it to Drive', 'info');
+}
+
+q('#report-btn')?.addEventListener('click', exportReport);
 
 // Keep the Drive copy fresh and complete as the tab/device comes and goes
 document.addEventListener('visibilitychange', async () => {
@@ -2355,6 +2464,35 @@ q('#done-toggle').addEventListener('click', () => {
   if (hint) hint.textContent = doneExpanded ? 'click to collapse' : 'click to expand';
   renderBoard();
 });
+
+// Clear the Done shelf in one go (only the cards the owner filter shows)
+function deleteAllDone() {
+  const cb = currentBoard();
+  const ids = new Set((cb?.cards || []).filter(c => c.status === 'done' && isCardVisible(c)).map(c => c.id));
+  if (!ids.size) { showToast('No done cards to delete', 'info'); return; }
+  if (!confirm(
+    `Delete ${ids.size} done card(s) from “${cb.name}”?\n\n` +
+    'Tip: export a report first to keep a record — this can’t be undone.'
+  )) return;
+  const els = [...document.querySelectorAll('#done-cards .card')];
+  els.forEach((el, i) => {
+    el.style.transition = `transform .25s ease ${i * 25}ms, opacity .25s ease ${i * 25}ms`;
+    el.style.transform  = 'scale(0.7)';
+    el.style.opacity    = '0';
+  });
+  launchConfetti();
+  setTimeout(launchConfetti, 250);
+  setTimeout(() => {
+    cb.cards = cb.cards.filter(c => !ids.has(c.id));
+    onDataChanged();
+    renderOwnerFilterChips();
+    renderBoard();
+    showToast(`${ids.size} done card(s) cleared — nice week!`, 'success');
+  }, 250 + Math.min(els.length, 20) * 25);
+}
+
+q('#done-report-btn').addEventListener('click', e => { e.stopPropagation(); exportReport(); });
+q('#done-clear-btn').addEventListener('click', e => { e.stopPropagation(); deleteAllDone(); });
 
 // ─── CARD MODAL ───────────────────────────────────────────────────────────────
 q('#fab').addEventListener('click', () => openModal());

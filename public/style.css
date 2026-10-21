@@ -615,6 +615,26 @@ body.tab-dragging, body.tab-dragging * { cursor: grabbing !important; }
 .shelf__hint { font-size: .625rem; color: var(--f-fg4); opacity: 0; transition: opacity var(--f-fast); }
 .shelf__header:hover .shelf__hint { opacity: 1; }
 
+/* Done shelf actions — only while expanded */
+.shelf__actions { display: none; align-items: center; gap: 6px; }
+.shelf--done.expanded .shelf__actions { display: flex; }
+.shelf--done.expanded .shelf__hint { display: none; }
+.shelf__action {
+  font: inherit;
+  font-size: .6875rem;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: var(--f-rpill);
+  border: 1px solid var(--f-stroke1);
+  background: var(--f-bg1);
+  color: var(--f-fg2);
+  cursor: pointer;
+  transition: background var(--f-fast), color var(--f-fast), border-color var(--f-fast);
+}
+.shelf__action:hover { border-color: var(--f-done); color: var(--f-done); }
+.shelf__action--danger { color: var(--f-danger); border-color: var(--f-danger); background: var(--f-danger-bg); }
+.shelf__action--danger:hover { background: var(--f-danger); color: #fff; border-color: var(--f-danger); }
+
 .shelf__chevron { color: var(--f-fg4); font-size: 11px; transition: transform var(--f-slow) var(--f-ease); }
 .shelf--archive.expanded #archive-chevron { transform: rotate(180deg); }
 .shelf--done.expanded #done-chevron { transform: rotate(180deg); }
