@@ -83,21 +83,40 @@ const getDateCls = ds => {
 
 // ─── TOAST NOTIFICATIONS ─────────────────────────────────────────────────────
 const TOAST_DURATION = 2500;
+const activeToasts = new Map(); // message → { toast, count, timer }
 function showToast(message, type = 'success') {
   const container = q('#toast-container');
+  const key = `${type}|${message}`;
+
+  const dismiss = toast => {
+    activeToasts.delete(key);
+    toast.classList.remove('toast--visible');
+    // transitionend never fires while the tab is hidden/asleep, so back it with a timeout
+    toast.addEventListener('transitionend', () => toast.remove(), { once: true });
+    setTimeout(() => toast.remove(), 400);
+  };
+
+  // Same message already on screen: bump a counter and restart its timer instead of stacking
+  const existing = activeToasts.get(key);
+  if (existing) {
+    existing.count++;
+    existing.toast.querySelector('.toast__message').textContent = `${message} (×${existing.count})`;
+    clearTimeout(existing.timer);
+    existing.timer = setTimeout(() => dismiss(existing.toast), TOAST_DURATION);
+    return;
+  }
+
   const toast = document.createElement('div');
   toast.className = `toast toast--${type}`;
-  
+
   const icons = { success: '✓', error: '✕', info: '◈', loading: '◐' };
   toast.innerHTML = `<span class="toast__icon">${icons[type] || icons.success}</span><span class="toast__message">${esc(message)}</span>`;
-  
+
   container.appendChild(toast);
   requestAnimationFrame(() => toast.classList.add('toast--visible'));
-  
-  setTimeout(() => {
-    toast.classList.remove('toast--visible');
-    toast.addEventListener('transitionend', () => toast.remove(), { once: true });
-  }, TOAST_DURATION);
+
+  const entry = { toast, count: 1, timer: setTimeout(() => dismiss(toast), TOAST_DURATION) };
+  activeToasts.set(key, entry);
 }
 
 // ─── BOARD HELPERS ────────────────────────────────────────────────────────────
