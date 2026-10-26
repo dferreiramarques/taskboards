@@ -55,6 +55,8 @@ let dynamicTabsPerPage = 4;   // computed dynamically based on available width
 let archiveExpanded = false;
 let doneExpanded    = false;
 let selectedColumn  = 'todo';
+let selectedEffort  = '';     // '' | 'low' | 'high' — the two axes of the quick-wins matrix
+let selectedImpact  = '';
 let dragState       = null;
 let deleteCardId    = null;
 let dropIndicator   = null;   // the insertion line element
@@ -1605,11 +1607,13 @@ function renameBoard(id, name) {
 }
 
 // ─── CARD CRUD ────────────────────────────────────────────────────────────────
-function createCard(title, owner, dueDate, status, note = '') {
+function createCard(title, owner, dueDate, status, note = '', effort = '', impact = '') {
   const zoneCards = currentBoard().cards.filter(c => c.status === status);
   const maxOrder  = zoneCards.reduce((m, c) => Math.max(m, c.sortOrder ?? c.createdAt), -1);
   const card = { id: uid(), title: title.trim(), owner: owner.trim(), dueDate, status, createdAt: Date.now(), sortOrder: maxOrder + 1 };
   if (note.trim()) card.note = note.trim();
+  if (effort) card.effort = effort;
+  if (impact) card.impact = impact;
   currentBoard().cards.push(card);
   onDataChanged();
   renderOwnerFilterChips();
@@ -2104,6 +2108,8 @@ function renderBoard() {
   vis('#inprogress-empty', filteredCounts.inprogress === 0);
   vis('#archive-empty',    filteredCounts.archive === 0);
   vis('#done-empty',       filteredCounts.done === 0);
+
+  renderMatrix(filteredZones.todo.concat(filteredZones.inprogress, filteredZones.archive));
 }
 
 function renderZone(containerId, zoneCards, compact) {
@@ -2513,6 +2519,61 @@ function deleteAllDone() {
 q('#done-report-btn').addEventListener('click', e => { e.stopPropagation(); exportReport(); });
 q('#done-clear-btn').addEventListener('click', e => { e.stopPropagation(); deleteAllDone(); });
 
+// ─── QUICK-WINS MATRIX ────────────────────────────────────────────────────────
+// Impact on the Y axis (high at the top = priority), effort on the X axis (low on the left). Inside each
+// quadrant cards run left → right: no due date first, then the nearest due date, then the furthest.
+const LS_VIEW = 'taskboards-view';
+const STATUS_LABEL = { todo: 'To do', inprogress: 'In progress', archive: 'Archive' };
+let matrixView = false;
+try { matrixView = localStorage.getItem(LS_VIEW) === 'matrix'; } catch {}
+
+function matrixOrder(a, b) {
+  if (!a.dueDate !== !b.dueDate) return a.dueDate ? 1 : -1;
+  if (a.dueDate !== b.dueDate) return a.dueDate < b.dueDate ? -1 : 1;
+  return (a.sortOrder ?? a.createdAt) - (b.sortOrder ?? b.createdAt);
+}
+
+function buildMatrixCard(card) {
+  const el = document.createElement('div');
+  el.className = `mcard mcard--${card.status}`;
+  el.dataset.id = card.id;
+  el.title = `${STATUS_LABEL[card.status] || ''} — click to edit`;
+  el.innerHTML = `
+    <h3 class="card__title">${esc(card.title)}</h3>
+    <div class="card__meta">
+      ${card.owner ? `<span class="card__owner">${esc(card.owner)}</span>` : '<span></span>'}
+      ${card.dueDate ? `<span class="card__date ${getDateCls(card.dueDate)}">${fmtDate(card.dueDate)}</span>` : ''}
+    </div>`;
+  return el;
+}
+
+function renderMatrix(cards) {
+  document.body.classList.toggle('matrix-view', matrixView);
+  q('#matrix-btn').classList.toggle('active', matrixView);
+  q('#matrix-btn').title = matrixView ? 'Back to the board' : 'Quick-wins matrix';
+  if (!matrixView) return;
+  const buckets = { 'high-low': [], 'high-high': [], 'low-low': [], 'low-high': [], unrated: [] };
+  cards.forEach(c => {
+    if (c.effort && c.impact) buckets[`${c.impact}-${c.effort}`].push(c);
+    else buckets.unrated.push(c);
+  });
+  Object.entries(buckets).forEach(([key, list]) => {
+    q(`#mx-${key}`).replaceChildren(...list.sort(matrixOrder).map(buildMatrixCard));
+    q(`#mx-${key}-count`).textContent = list.length;
+  });
+  q('#matrix-unrated').hidden = buckets.unrated.length === 0;
+}
+
+q('#matrix-btn').addEventListener('click', () => {
+  matrixView = !matrixView;
+  try { localStorage.setItem(LS_VIEW, matrixView ? 'matrix' : 'board'); } catch {}
+  renderBoard();
+});
+q('#matrix').addEventListener('click', e => {
+  const el = e.target.closest('.mcard');
+  if (el) openEditModal(el.dataset.id);
+});
+
 // ─── CARD MODAL ───────────────────────────────────────────────────────────────
 q('#fab').addEventListener('click', () => openModal());
 q('#modal-close').addEventListener('click', closeModal);
@@ -2521,6 +2582,20 @@ q('#modal').querySelectorAll('.modal__toggle-btn').forEach(btn=>{
   btn.addEventListener('click', ()=>{
     q('#modal').querySelectorAll('.modal__toggle-btn').forEach(b=>b.classList.remove('active'));
     btn.classList.add('active'); selectedColumn=btn.dataset.col;
+  });
+});
+// Effort / impact: low | high; clicking the active one clears it
+function syncLevelToggles() {
+  q('#modal').querySelectorAll('.modal__level-btn').forEach(b => {
+    const cur = b.dataset.axis === 'effort' ? selectedEffort : selectedImpact;
+    b.classList.toggle('active', b.dataset.level === cur);
+  });
+}
+q('#modal').querySelectorAll('.modal__level-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const val = btn.classList.contains('active') ? '' : btn.dataset.level;
+    if (btn.dataset.axis === 'effort') selectedEffort = val; else selectedImpact = val;
+    syncLevelToggles();
   });
 });
 q('#modal-submit').addEventListener('click', submitCard);
@@ -2550,7 +2625,9 @@ function openModal() {
   q('#input-title').value=''; q('#input-owner').value=''; q('#input-date').value='';
   setNoteField('');
   selectedColumn='todo';
+  selectedEffort=''; selectedImpact='';
   syncColumnToggle();
+  syncLevelToggles();
   refreshOwnerUI();
   setTimeout(()=>q('#input-title').focus(), 80);
 }
@@ -2571,7 +2648,9 @@ function openEditModal(id) {
   const movable = card.status === 'todo' || card.status === 'inprogress';
   q('#modal-col-field').hidden = !movable;
   selectedColumn = card.status;
+  selectedEffort = card.effort || ''; selectedImpact = card.impact || '';
   syncColumnToggle();
+  syncLevelToggles();
   refreshOwnerUI();
   setTimeout(() => { const t = q('#input-title'); t.focus(); t.select(); }, 80);
 }
@@ -2589,13 +2668,15 @@ function showNoteField(show) {
 
 function closeModal() { q('#modal-overlay').classList.add('hidden'); editingCardId = null; }
 
-function updateCard(id, { title, owner, dueDate, note, status }) {
+function updateCard(id, { title, owner, dueDate, note, status, effort = '', impact = '' }) {
   const card = currentCards().find(c => c.id === id);
   if (!card) return;
   card.title   = title.trim();
   card.owner   = owner.trim();
   card.dueDate = dueDate;
   if (note.trim()) card.note = note.trim(); else delete card.note;
+  if (effort) card.effort = effort; else delete card.effort;
+  if (impact) card.impact = impact; else delete card.impact;
   const movable = card.status === 'todo' || card.status === 'inprogress';
   if (movable && status !== card.status) {
     moveOrReorderCard(id, status, null);   // joins the end of the other column (also saves + re-renders)
@@ -2611,8 +2692,8 @@ function submitCard() {
   const title=q('#input-title').value.trim();
   if (!title) { shakeEl(q('#input-title')); return; }
   const note = q('#input-note').value;
-  if (editingCardId) updateCard(editingCardId, { title, owner: q('#input-owner').value, dueDate: q('#input-date').value, note, status: selectedColumn });
-  else createCard(title, q('#input-owner').value, q('#input-date').value, selectedColumn, note);
+  if (editingCardId) updateCard(editingCardId, { title, owner: q('#input-owner').value, dueDate: q('#input-date').value, note, status: selectedColumn, effort: selectedEffort, impact: selectedImpact });
+  else createCard(title, q('#input-owner').value, q('#input-date').value, selectedColumn, note, selectedEffort, selectedImpact);
   closeModal();
 }
 function shakeEl(el) { el.style.animation='none'; requestAnimationFrame(()=>{ el.style.animation='delete-shake .35s ease'; }); }

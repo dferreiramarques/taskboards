@@ -201,6 +201,46 @@
 
   <div id="drag-ghost" class="drag-ghost"></div>
 
+  <!-- ── QUICK-WINS MATRIX (replaces the board while on) ── -->
+  <section id="matrix" class="matrix" aria-label="Quick-wins matrix">
+    <div class="matrix__grid">
+      <div class="matrix__corner"></div>
+      <div class="matrix__col-label">LOW EFFORT</div>
+      <div class="matrix__col-label">HIGH EFFORT</div>
+
+      <div class="matrix__row-label"><span>HIGH IMPACT</span></div>
+      <div class="matrix__quad matrix__quad--win">
+        <div class="matrix__quad-head"><span>Quick wins</span><span class="matrix__count" id="mx-high-low-count">0</span></div>
+        <div class="matrix__cards" id="mx-high-low"></div>
+      </div>
+      <div class="matrix__quad">
+        <div class="matrix__quad-head"><span>Big bets</span><span class="matrix__count" id="mx-high-high-count">0</span></div>
+        <div class="matrix__cards" id="mx-high-high"></div>
+      </div>
+
+      <div class="matrix__row-label"><span>LOW IMPACT</span></div>
+      <div class="matrix__quad">
+        <div class="matrix__quad-head"><span>Fill-ins</span><span class="matrix__count" id="mx-low-low-count">0</span></div>
+        <div class="matrix__cards" id="mx-low-low"></div>
+      </div>
+      <div class="matrix__quad">
+        <div class="matrix__quad-head"><span>Time sinks</span><span class="matrix__count" id="mx-low-high-count">0</span></div>
+        <div class="matrix__cards" id="mx-low-high"></div>
+      </div>
+    </div>
+    <div class="matrix__unrated" id="matrix-unrated" hidden>
+      <div class="matrix__quad-head"><span>Not rated yet</span><span class="matrix__count" id="mx-unrated-count">0</span></div>
+      <div class="matrix__cards" id="mx-unrated"></div>
+    </div>
+    <div class="matrix__legend">
+      <span class="matrix__key matrix__key--todo">TO DO</span>
+      <span class="matrix__key matrix__key--inprogress">IN PROGRESS</span>
+      <span class="matrix__key matrix__key--archive">ARCHIVE</span>
+      <span>Top = higher priority · inside each quadrant: no due date first, then nearest → furthest</span>
+    </div>
+  </section>
+
+  <button id="matrix-btn" class="matrix-btn" title="Quick-wins matrix" aria-label="Quick-wins matrix">⊞</button>
   <button id="fab" class="fab" title="New card (Ctrl+Enter)">
     <span class="fab__icon">+</span>
   </button>
@@ -230,6 +270,22 @@
         <div class="modal__field">
           <button type="button" class="note-toggle" id="note-toggle" aria-expanded="false" aria-controls="input-note"><span aria-hidden="true">🗒️</span> <span id="note-toggle-label">ADD NOTE</span></button>
           <textarea class="modal__input modal__textarea" id="input-note" rows="3" maxlength="500" placeholder="A short note..." hidden></textarea>
+        </div>
+        <div class="modal__row">
+          <div class="modal__field">
+            <label class="modal__label">EFFORT</label>
+            <div class="modal__toggle">
+              <button type="button" class="modal__level-btn" data-axis="effort" data-level="low">LOW</button>
+              <button type="button" class="modal__level-btn" data-axis="effort" data-level="high">HIGH</button>
+            </div>
+          </div>
+          <div class="modal__field">
+            <label class="modal__label">IMPACT</label>
+            <div class="modal__toggle">
+              <button type="button" class="modal__level-btn" data-axis="impact" data-level="low">LOW</button>
+              <button type="button" class="modal__level-btn" data-axis="impact" data-level="high">HIGH</button>
+            </div>
+          </div>
         </div>
         <div class="modal__field" id="modal-col-field">
           <label class="modal__label" id="modal-col-label">STARTING COLUMN</label>

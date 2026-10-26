@@ -1120,7 +1120,8 @@ body.done-expanded .fab { bottom: calc(300px + 24px); }
 [data-theme="light"] .modal__input--date { color-scheme: light; }
 
 .modal__toggle { display: flex; gap: 4px; }
-.modal__toggle-btn {
+.modal__toggle-btn,
+.modal__level-btn {
   flex: 1;
   background: var(--f-bg2);
   border: 1px solid var(--f-stroke1);
@@ -1134,7 +1135,11 @@ body.done-expanded .fab { bottom: calc(300px + 24px); }
   transition: all var(--f-fast);
   font-family: inherit;
 }
-.modal__toggle-btn:hover { background: var(--f-bg3); color: var(--f-fg1); }
+.modal__toggle-btn:hover,
+.modal__level-btn:hover { background: var(--f-bg3); color: var(--f-fg1); }
+.modal__level-btn.active { background: var(--f-brand-bg); border-color: var(--f-brand); color: var(--f-brand); font-weight: 600; }
+.modal__row { display: flex; gap: 12px; }
+.modal__row > .modal__field { flex: 1; min-width: 0; }
 .modal__toggle-btn.active[data-col="todo"]      { background: var(--f-todo-bg); border-color: var(--f-todo); color: var(--f-todo); font-weight: 600; }
 .modal__toggle-btn.active[data-col="inprogress"] { background: var(--f-inprog-bg); border-color: var(--f-inprog); color: var(--f-inprog); font-weight: 600; }
 
@@ -1493,6 +1498,56 @@ a.user-pill__menu-item { text-decoration: none; box-sizing: border-box; }
   background: var(--f-brand) !important;
   color: #fff !important;
 }
+
+/* ══════════════════════════════════════════════════════
+   QUICK-WINS MATRIX — impact (Y, high = priority) × effort (X)
+   ══════════════════════════════════════════════════════ */
+.matrix { display: none; flex: 1; min-height: 0; overflow: auto; padding: 16px 20px 96px; flex-direction: column; gap: 14px; position: relative; z-index: 10; }
+body.matrix-view .matrix { display: flex; }
+body.matrix-view #board, body.matrix-view .shelf { display: none; }
+
+.matrix__grid { display: grid; grid-template-columns: 28px 1fr 1fr; grid-template-rows: auto 1fr 1fr; gap: 10px; flex: 1; min-height: 360px; }
+.matrix__col-label, .matrix__row-label { font-size: .6875rem; font-weight: 700; letter-spacing: .08em; color: var(--f-fg3); display: flex; align-items: center; justify-content: center; }
+.matrix__row-label span { writing-mode: vertical-rl; transform: rotate(180deg); }
+
+.matrix__quad, .matrix__unrated { background: var(--f-bg1); border: 1px solid var(--f-stroke2); border-radius: var(--f-r8); padding: 10px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.matrix__unrated[hidden] { display: none; }
+.matrix__quad--win { background: var(--f-brand-bg2); border-color: var(--f-brand); }
+.matrix__quad-head { display: flex; align-items: center; justify-content: space-between; font-size: .75rem; font-weight: 700; letter-spacing: .02em; color: var(--f-fg2); }
+.matrix__count { font-size: .6875rem; font-weight: 600; color: var(--f-fg3); background: var(--f-bg3); border-radius: var(--f-rpill); padding: 0 8px; }
+.matrix__cards { display: flex; flex-wrap: wrap; align-content: flex-start; gap: 8px; }
+
+.mcard { flex: 1 1 140px; max-width: 240px; min-width: 0; padding: 8px 10px; background: var(--f-bg1); border: 1px solid var(--f-stroke1); border-left-width: 3px; border-radius: var(--f-r4); cursor: pointer; box-shadow: var(--f-shadow2); transition: transform var(--f-fast) var(--f-ease), box-shadow var(--f-fast) var(--f-ease); }
+.mcard:hover { transform: translateY(-1px); box-shadow: var(--f-shadow8); }
+.mcard--todo       { border-left-color: var(--f-todo);  background: color-mix(in srgb, var(--f-todo) 8%, var(--f-bg1)); }
+.mcard--inprogress { border-left-color: var(--f-inprog); background: color-mix(in srgb, var(--f-inprog) 8%, var(--f-bg1)); }
+.mcard--archive    { border-left-color: var(--f-archive);   background: var(--f-bg2); opacity: .75; }
+.mcard--archive .card__title, .mcard--archive .card__owner, .mcard--archive .card__date { color: var(--f-fg3); }
+.mcard--archive .card__owner { background: var(--f-bg3); border-color: var(--f-stroke2); }
+.mcard .card__title { margin-bottom: 5px; }
+
+.matrix__legend { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; font-size: .6875rem; color: var(--f-fg3); }
+.matrix__key { font-weight: 700; letter-spacing: .04em; padding: 1px 8px; border-radius: var(--f-rpill); border: 1px solid; }
+.matrix__key--todo       { color: var(--f-todo);  border-color: var(--f-todo);  background: var(--f-todo-bg); }
+.matrix__key--inprogress { color: var(--f-inprog); border-color: var(--f-inprog); background: var(--f-inprog-bg); }
+.matrix__key--archive    { color: var(--f-fg3);   border-color: var(--f-fg4);   background: var(--f-bg2); }
+
+/* ⊞ view switch, stacked above the + button */
+.matrix-btn {
+  position: fixed; right: 20px; bottom: calc(48px + 16px + 48px + 12px);
+  width: 48px; height: 48px; border-radius: 50%;
+  background: var(--f-bg1); color: var(--f-fg2);
+  border: 1px solid var(--f-stroke1); box-shadow: var(--f-shadow16);
+  font-size: 24px; line-height: 1; cursor: pointer; z-index: 100;
+  display: flex; align-items: center; justify-content: center;
+  transition: transform var(--f-normal) var(--f-ease), background var(--f-fast), color var(--f-fast), border-color var(--f-fast), bottom var(--f-slow) var(--f-ease);
+}
+.matrix-btn:hover { background: var(--f-bg2); color: var(--f-fg1); transform: scale(1.06); }
+.matrix-btn.active { background: var(--f-brand); border-color: var(--f-brand); color: #fff; }
+body.done-expanded .matrix-btn { bottom: calc(300px + 24px + 48px + 12px); }
+body.matrix-view .fab, body.matrix-view.done-expanded .fab { bottom: 20px; }
+body.matrix-view .matrix-btn, body.matrix-view.done-expanded .matrix-btn { bottom: calc(20px + 48px + 12px); }
+@media (max-width: 480px) { .matrix-btn { right: 12px; bottom: calc(48px + 12px + 48px + 12px); } }
 
 /* phones: the top bar keeps the board tabs and the avatar; logo and theme toggle move into the avatar menu */
 @media (max-width: 700px) {

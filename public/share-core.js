@@ -100,6 +100,8 @@
         };
         if (Number.isFinite(c.sortOrder)) card.sortOrder = c.sortOrder;
         if (typeof c.note === 'string' && c.note.trim()) card.note = c.note.trim().slice(0, 500);   // same limit as the note field
+        if (c.effort === 'low' || c.effort === 'high') card.effort = c.effort;
+        if (c.impact === 'low' || c.impact === 'high') card.impact = c.impact;
         return card;
       });
   }
