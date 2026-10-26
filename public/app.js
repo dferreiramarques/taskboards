@@ -2629,16 +2629,20 @@ function initTheme() {
 function applyTheme(theme, animate=true) {
   document.documentElement.setAttribute('data-theme', theme);
   q('#theme-icon').innerHTML = theme==='dark' ? ICON_SUN : ICON_MOON;   // same icons as Roadmaps: the icon offers the other theme
+  q('#theme-menu-icon').innerHTML = theme==='dark' ? ICON_SUN : ICON_MOON;
+  q('#theme-menu-label').textContent = theme==='dark' ? 'Light theme' : 'Dark theme';
   localStorage.setItem(LS_THEME, theme);
   const mc=document.querySelector('meta[name="theme-color"]');
   // browser chrome follows the theme's own background, so light and dark stay consistent
   if(mc) mc.setAttribute('content', getComputedStyle(document.documentElement).getPropertyValue('--f-bg1').trim() || (theme==='dark' ? '#141414' : '#ffffff'));
 }
-q('#theme-btn').addEventListener('click', ()=>{
+function toggleTheme(origin) {
   const cur=document.documentElement.getAttribute('data-theme');
   applyTheme(cur==='dark'?'light':'dark');
-  burstParticles(q('#theme-btn'));
-});
+  burstParticles(origin);
+}
+q('#theme-btn').addEventListener('click', ()=>toggleTheme(q('#theme-btn')));
+q('#theme-menu-btn').addEventListener('click', ()=>toggleTheme(q('#user-pill')));
 
 // ─── CONFETTI ────────────────────────────────────────────────────────────────
 const CONFETTI_COLORS = ['#fb923c','#f0c040','#fbbf24','#f97316','#fdba74','#fcd34d','#fed7aa'];
