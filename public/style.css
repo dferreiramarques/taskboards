@@ -1549,15 +1549,23 @@ body.matrix-view .fab, body.matrix-view.done-expanded .fab { bottom: 20px; }
 body.matrix-view .matrix-btn, body.matrix-view.done-expanded .matrix-btn { bottom: calc(20px + 48px + 12px); }
 @media (max-width: 480px) { .matrix-btn { right: 12px; bottom: calc(48px + 12px + 48px + 12px); } }
 
-/* phones: the top bar keeps the board tabs and the avatar; logo and theme toggle move into the avatar menu */
+/* phones: the top bar keeps only the current board's name with ‹ › to step between boards,
+   plus a hamburger; everything else (logo, help, install, theme, new board, account) lives in its menu */
+.user-pill__burger { display: none; }
 @media (max-width: 700px) {
   .topbar { gap: 8px; padding: 8px 12px; flex-wrap: nowrap; }
-  .topbar__name, #sync-chip, #help-btn, .user-pill__name { display: none; }
-  .user-pill { padding: 0 4px; }
-  .topbar:has(.user-pill:not(.hidden)) .topbar__brand,
-  .topbar:has(.user-pill:not(.hidden)) #theme-btn { display: none; }
+  .topbar__brand, .topbar__name, #sync-chip, #help-btn, #install-btn, #theme-btn, #add-board, .user-pill__name, .user-pill__avatar { display: none; }
+  .user-pill { padding: 0; width: 36px; justify-content: center; }
+  .user-pill__burger { display: block; width: 18px; height: 18px; color: var(--f-fg1); }
   .user-pill__menu-mobile { display: block; }
+  .user-pill__menu-mobile[hidden] { display: none; }
   #theme-menu-btn { display: flex; }
+
+  /* the one visible board tab fills the bar between the arrows */
+  .boards-bar { justify-content: center; }
+  .boards-tabs { flex: 1 1 auto; justify-content: center; }
+  .boards-tabs .board-tab { max-width: 100%; min-width: 0; }
+  .tab-nav { width: 36px; height: 36px; }
 
   /* smaller interface text; the cards keep their desktop size (rem is relative to --tb-scale) */
   :root { --tb-scale: 1.1; --tb-card-k: calc(1.25 / 1.1); }

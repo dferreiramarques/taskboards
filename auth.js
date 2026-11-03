@@ -97,6 +97,20 @@ const pickApp = o => (APP_ORIGINS.includes(o) ? o : APP_ORIGINS[0]);
 const backToApp = (res, app, error) =>
   res.redirect(`${app}/app.html${error ? `?auth_error=${encodeURIComponent(error)}` : ''}`);
 
+// Hands the first access token straight to the page in the URL fragment (never sent
+// to any server). Browsers that block the cookie on the follow-up cross-origin
+// /auth/refresh call (DuckDuckGo, Brave, Safari…) would otherwise bounce a
+// successful sign-in back to the gate; the cookie then only matters for renewals.
+const backToAppSignedIn = (res, app, tok) => {
+  const frag = new URLSearchParams({
+    tb_token: tok.access_token || '',
+    tb_exp:   String(tok.expires_in || 3600),
+    tb_scope: tok.scope || ''
+  });
+  res.set('Cache-Control', 'no-store');
+  res.redirect(`${app}/app.html#${frag}`);
+};
+
 // Tiny per-IP limiter so the refresh endpoint can't be hammered
 const hits = new Map();
 function limit(max, windowMs) {
@@ -183,7 +197,8 @@ router.get('/callback', requireEnabled, async (req, res) => {
   if (!tok.body.refresh_token) return backToApp(res, app, 'no_refresh');
 
   setCookie(res, COOKIE_RT, seal(tok.body.refresh_token), RT_MAX_AGE);
-  backToApp(res, app);
+  if (tok.body.access_token) backToAppSignedIn(res, app, tok.body);
+  else backToApp(res, app);
 });
 
 router.post('/refresh', requireEnabled, requireAppOrigin, limit(120, 60000), async (req, res) => {

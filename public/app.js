@@ -831,6 +831,16 @@ async function trySilentSignIn() {
   if (AUTH_API) {
     const err = new URLSearchParams(location.search).get('auth_error');
     if (err) { history.replaceState(null, '', location.pathname); setGateStatus(serverAuthErrorMessage(err)); }
+
+    // Fresh from the sign-in redirect: the server put the first token in the URL fragment,
+    // so this works even where the browser blocks the session cookie (DuckDuckGo, Brave…)
+    const frag = new URLSearchParams(location.hash.slice(1));
+    if (frag.get('tb_token')) {
+      history.replaceState(null, '', location.pathname + location.search);
+      applyToken({ access_token: frag.get('tb_token'), expires_in: Number(frag.get('tb_exp')) || 3600, scope: frag.get('tb_scope') || '' });
+      await completeSignIn();
+      return;
+    }
     if (restoreToken()) { await completeSignIn(); return; }
     const res = await serverRefresh();
     if (res.status === 'ok') await completeSignIn();
@@ -1001,7 +1011,11 @@ function showUserPill() {
 
 function openUserMenu()  { q('#user-pill').classList.add('open'); }
 function closeUserMenu() { q('#user-pill').classList.remove('open'); }
-function toggleUserMenu(e) { e.stopPropagation(); q('#user-pill').classList.toggle('open'); }
+function toggleUserMenu(e) {
+  e.stopPropagation();
+  q('#install-menu-btn').hidden = q('#install-btn').style.display === 'none';   // only offer install when the browser can
+  q('#user-pill').classList.toggle('open');
+}
 
 // Click on pill to open menu; click outside to close
 q('#user-pill').addEventListener('click', toggleUserMenu);
@@ -1756,18 +1770,23 @@ function computeTabsPerPage() {
   return Math.max(1, count);
 }
 
+const isPhoneBar = () => window.matchMedia('(max-width: 700px)').matches;   // keep in step with the phone block in style.css
+
 function renderTabs() {
   const container = q('#boards-tabs');
   const prevBtn   = q('#tab-prev');
   const nextBtn   = q('#tab-next');
   container.innerHTML = '';
 
-  dynamicTabsPerPage = computeTabsPerPage();
+  const phone = isPhoneBar();
+  const curIdx = boards.findIndex(b => b.id === currentBoardId);
+  dynamicTabsPerPage = phone ? 1 : computeTabsPerPage();
 
   const totalPages = Math.ceil(boards.length / dynamicTabsPerPage);
   tabPage = Math.max(0, Math.min(tabPage, totalPages - 1));
 
-  const start = tabPage * dynamicTabsPerPage;
+  // Phones show only the current board; ‹ › move between boards
+  const start = phone ? Math.max(0, curIdx) : tabPage * dynamicTabsPerPage;
   const slice = boards.slice(start, start + dynamicTabsPerPage);
 
   slice.forEach(board => {
@@ -1825,8 +1844,8 @@ function renderTabs() {
 
   // Show prev/next only when there are multiple pages
   const multiPage = totalPages > 1;
-  prevBtn.disabled = tabPage === 0;
-  nextBtn.disabled = tabPage >= totalPages - 1;
+  prevBtn.disabled = phone ? curIdx <= 0 : tabPage === 0;
+  nextBtn.disabled = phone ? curIdx >= boards.length - 1 : tabPage >= totalPages - 1;
   prevBtn.style.visibility = multiPage ? '' : 'hidden';
   nextBtn.style.visibility = multiPage ? '' : 'hidden';
 }
@@ -2057,9 +2076,21 @@ function startRename(tab, boardId, nameEl) {
   });
 }
 
-q('#tab-prev').addEventListener('click', () => { tabPage = Math.max(0, tabPage-1); renderTabs(); });
-q('#tab-next').addEventListener('click', () => { tabPage = Math.min(Math.ceil(boards.length/dynamicTabsPerPage)-1, tabPage+1); renderTabs(); });
+// Phones: ‹ › step through the boards and open each one straight away
+function stepBoard(dir) {
+  const i = boards.findIndex(b => b.id === currentBoardId) + dir;
+  if (boards[i]) switchBoard(boards[i].id);
+}
+q('#tab-prev').addEventListener('click', () => {
+  if (isPhoneBar()) return stepBoard(-1);
+  tabPage = Math.max(0, tabPage-1); renderTabs();
+});
+q('#tab-next').addEventListener('click', () => {
+  if (isPhoneBar()) return stepBoard(1);
+  tabPage = Math.min(Math.ceil(boards.length/dynamicTabsPerPage)-1, tabPage+1); renderTabs();
+});
 q('#add-board').addEventListener('click', addBoard);
+q('#add-board-menu-btn').addEventListener('click', addBoard);
 
 // Re-compute tabs on resize so they always fill available space
 let _resizeTimer;
@@ -2700,6 +2731,8 @@ function shakeEl(el) { el.style.animation='none'; requestAnimationFrame(()=>{ el
 
 // ─── HELP MODAL ───────────────────────────────────────────────────────────────
 q('#help-btn').addEventListener('click',  ()=>q('#help-overlay').classList.remove('hidden'));
+q('#help-menu-btn').addEventListener('click', ()=>q('#help-overlay').classList.remove('hidden'));
+q('#install-menu-btn').addEventListener('click', ()=>q('#install-btn').click());
 q('#help-close').addEventListener('click',()=>q('#help-overlay').classList.add('hidden'));
 q('#help-overlay').addEventListener('click', e=>{ if(e.target===q('#help-overlay')) q('#help-overlay').classList.add('hidden'); });
 
