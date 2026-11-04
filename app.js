@@ -1157,12 +1157,12 @@ const REPORT_SECTIONS = [['done', 'Done'], ['inprogress', 'In progress'], ['todo
 const pad2 = n => String(n).padStart(2, '0');
 const mdText = s => String(s || '').replace(/\s+/g, ' ').replace(/([\\`*_[\]<>#|])/g, '\\$1').trim();
 
-function reportFilename(board, d) {
+function reportFilename(board, d, ext = 'md') {
   const name = board.name.normalize('NFKD').replace(/[̀-ͯ]/g, '')
     .replace(/[^\w-]+/g, '-').replace(/^-+|-+$/g, '').toLowerCase() || 'board';
   const date = `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
   const time = `${pad2(d.getHours())}${pad2(d.getMinutes())}${pad2(d.getSeconds())}`;
-  return `taskboards_${name}_${date}_${time}.md`;
+  return `taskboards_${name}_${date}_${time}.${ext}`;
 }
 
 function buildReport(board, d) {
@@ -1224,13 +1224,13 @@ async function reportFolderId() {
   return id;
 }
 
-async function driveSaveReport(text, filename) {
+async function driveSaveReport(text, filename, mime = 'text/markdown') {
   const parent = await reportFolderId();
   const boundary = 'tb' + Math.random().toString(36).slice(2);
   const body =
     `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n` +
-    JSON.stringify({ name: filename, mimeType: 'text/markdown', parents: [parent] }) +
-    `\r\n--${boundary}\r\nContent-Type: text/markdown; charset=UTF-8\r\n\r\n${text}\r\n--${boundary}--`;
+    JSON.stringify({ name: filename, mimeType: mime, parents: [parent] }) +
+    `\r\n--${boundary}\r\nContent-Type: ${mime}\r\n\r\n${text}\r\n--${boundary}--`;
   const r = await driveFetch(`${DRIVE_UPLOAD_API}/files?uploadType=multipart&fields=id`, {
     method: 'POST',
     headers: { 'Content-Type': `multipart/related; boundary=${boundary}` },
@@ -1240,27 +1240,300 @@ async function driveSaveReport(text, filename) {
 }
 
 let reportBusy = false;
-async function exportReport() {
+async function exportReport(format = 'md') {
   const board = currentBoard();
   if (!board || reportBusy) return;
+  const pdf = format === 'pdf';
   const d = new Date();
-  const text = buildReport(board, d);
-  const filename = reportFilename(board, d);
+  const text = pdf ? buildReportPdf(board, d) : buildReport(board, d);   // the PDF is pure ASCII, so it travels as text
+  const filename = reportFilename(board, d, pdf ? 'pdf' : 'md');
+  const mime = pdf ? 'application/pdf' : 'text/markdown';
   if (driveReady && navigator.onLine && hasShareScope()) {
     reportBusy = true;
     try {
-      await driveSaveReport(text, filename);
+      await driveSaveReport(text, filename, mime);
       showToast(`Report saved to Drive › ${REPORT_FOLDER}`, 'success');
       return;
     } catch (e) {
       console.warn('report to Drive failed:', e.message);
     } finally { reportBusy = false; }
   }
-  downloadText(text, filename, 'text/markdown');
+  downloadText(text, filename, mime);
   showToast('Report downloaded — couldn’t save it to Drive', 'info');
 }
 
-q('#report-btn')?.addEventListener('click', exportReport);
+q('#report-btn')?.addEventListener('click', () => exportReport('md'));
+q('#report-pdf-btn')?.addEventListener('click', () => exportReport('pdf'));
+
+// ─── REPORT: PDF ─────────────────────────────────────────────────────────────
+// The same snapshot as a designed A4 document, written straight to a PDF file by code:
+// no print dialog, no third-party library, nothing leaves the device. It uses the PDF
+// standard fonts (Helvetica) with Windows-1252 text, so Latin accents and the usual
+// punctuation come through; any other character (emoji, CJK…) is shown as "?".
+const REPORT_COLORS = { done: '#16a34a', inprogress: '#d97706', todo: '#2563eb', archive: '#6b7280' };
+
+// Helvetica / Helvetica-Bold advance widths (1/1000 em) for ASCII 32…126
+const PDF_WIDTHS = {
+  r: '278 278 355 556 556 889 667 191 333 333 389 584 278 333 278 278 556 556 556 556 556 556 556 556 556 556 278 278 584 584 584 556 1015 667 667 722 722 667 611 778 722 278 500 667 556 833 722 778 667 778 722 667 611 722 667 944 667 667 611 278 278 278 469 556 333 556 556 500 556 556 278 556 556 222 222 500 222 833 556 556 556 556 333 500 278 556 500 722 500 500 500 334 260 334 584'.split(' ').map(Number),
+  b: '278 333 474 556 556 889 722 238 333 333 389 584 278 333 278 278 556 556 556 556 556 556 556 556 556 556 333 333 584 584 584 611 975 722 722 722 722 667 611 778 722 278 556 722 611 833 722 778 667 778 722 667 611 722 667 944 667 667 611 333 278 333 584 556 333 556 611 556 611 556 333 611 611 278 278 556 278 889 611 611 611 611 389 556 333 611 556 778 556 556 500 389 280 389 584'.split(' ').map(Number)
+};
+const PDF_EXTRA_WIDTHS = { '—': 1000, '–': 556, '•': 350, '…': 1000, '‘': 222, '’': 222, '“': 333, '”': 333, '€': 556, '«': 556, '»': 556,
+  'º': 365, 'ª': 370, '°': 400, '×': 584, '÷': 584, 'ß': 611, 'æ': 889, 'Æ': 1000, 'œ': 944, 'Œ': 1000, 'ø': 611, 'Ø': 778, '©': 737, '®': 737, '™': 1000, '¿': 611, '¡': 333, '·': 278, ' ': 278 };
+// Windows-1252 bytes 0x80–0x9F
+const WIN1252_HIGH = { '€': 0x80, '‚': 0x82, 'ƒ': 0x83, '„': 0x84, '…': 0x85, '†': 0x86, '‡': 0x87, 'ˆ': 0x88, '‰': 0x89, 'Š': 0x8A, '‹': 0x8B,
+  'Œ': 0x8C, 'Ž': 0x8E, '‘': 0x91, '’': 0x92, '“': 0x93, '”': 0x94, '•': 0x95, '–': 0x96, '—': 0x97, '˜': 0x98, '™': 0x99, 'š': 0x9A, '›': 0x9B, 'œ': 0x9C, 'ž': 0x9E, 'Ÿ': 0x9F };
+
+// Keeps only what Windows-1252 can show; everything else becomes "?"
+function pdfClean(s) {
+  let out = '';
+  for (const ch of String(s ?? '').normalize('NFC').replace(/[  -​  　\t]/g, ' ')) {
+    const c = ch.codePointAt(0);
+    if (c === 10) out += '\n';
+    else if (c < 32 || c === 127) out += ' ';
+    else if (c < 127 || (c >= 0xA0 && c <= 0xFF) || WIN1252_HIGH[ch]) out += ch;
+    else out += '?';
+  }
+  return out;
+}
+const pdfByte = ch => WIN1252_HIGH[ch] ?? ch.charCodeAt(0);
+const pdfEsc = s => Array.from(s, ch => {
+  const b = pdfByte(ch);
+  if (b === 40 || b === 41 || b === 92) return '\\' + String.fromCharCode(b);
+  return b < 32 || b > 126 ? '\\' + b.toString(8).padStart(3, '0') : ch;
+}).join('');
+
+function pdfCharWidth(ch, bold) {
+  const c = ch.charCodeAt(0);
+  if (c >= 32 && c <= 126) return PDF_WIDTHS[bold ? 'b' : 'r'][c - 32];
+  if (PDF_EXTRA_WIDTHS[ch]) return PDF_EXTRA_WIDTHS[ch];
+  const base = ch.normalize('NFD')[0];              // é → e, Ç → C …
+  const bc = base.charCodeAt(0);
+  return bc >= 32 && bc <= 126 ? PDF_WIDTHS[bold ? 'b' : 'r'][bc - 32] : 556;
+}
+const pdfTextWidth = (s, size, bold) => Array.from(s).reduce((w, ch) => w + pdfCharWidth(ch, bold), 0) * size / 1000;
+
+// Greedy word wrap to `maxW` points; honours newlines, breaks over-long words, caps at `maxLines`
+function pdfWrap(text, size, bold, maxW, maxLines = Infinity) {
+  const lines = [];
+  for (const para of pdfClean(text).split('\n')) {
+    let line = '';
+    for (const word of para.split(' ').filter(Boolean)) {
+      const trial = line ? `${line} ${word}` : word;
+      if (pdfTextWidth(trial, size, bold) <= maxW) { line = trial; continue; }
+      if (line) { lines.push(line); line = ''; }
+      let rest = word;
+      while (pdfTextWidth(rest, size, bold) > maxW) {
+        let n = 1;
+        while (n < rest.length && pdfTextWidth(rest.slice(0, n + 1), size, bold) <= maxW) n++;
+        lines.push(rest.slice(0, n));
+        rest = rest.slice(n);
+      }
+      line = rest;
+    }
+    lines.push(line);
+  }
+  while (lines.length > 1 && !lines[lines.length - 1]) lines.pop();
+  if (lines.length > maxLines) {
+    lines.length = maxLines;
+    lines[maxLines - 1] = lines[maxLines - 1].replace(/.{0,2}$/, '') + '...';
+  }
+  return lines;
+}
+
+function buildReportPdf(board, d) {
+  const PW = 595.28, PH = 841.89, M = 42, TOP = 46, LIMIT = PH - 58;
+  const CW = PW - 2 * M;
+  const GRAY = '#6b7280', LINE = '#e5e7eb';
+  const pages = [];
+  let ops = null, y = TOP;
+
+  const n = v => String(Math.round(v * 100) / 100);
+  const rgb = hex => [1, 3, 5].map(i => (parseInt(hex.slice(i, i + 2), 16) / 255).toFixed(3)).join(' ');
+  const newPage = () => { ops = []; pages.push(ops); y = TOP; };
+  const fy = v => PH - v;                                  // top-down → PDF coordinates
+
+  function path(x, top, w, h, r) {
+    const b = fy(top + h);
+    if (!r) return `${n(x)} ${n(b)} ${n(w)} ${n(h)} re`;
+    r = Math.min(r, w / 2, h / 2);
+    const k = r * 0.5523, R = x + w, T = b + h;
+    return [`${n(x + r)} ${n(b)} m`, `${n(R - r)} ${n(b)} l`, `${n(R - r + k)} ${n(b)} ${n(R)} ${n(b + r - k)} ${n(R)} ${n(b + r)} c`,
+      `${n(R)} ${n(T - r)} l`, `${n(R)} ${n(T - r + k)} ${n(R - r + k)} ${n(T)} ${n(R - r)} ${n(T)} c`,
+      `${n(x + r)} ${n(T)} l`, `${n(x + r - k)} ${n(T)} ${n(x)} ${n(T - r + k)} ${n(x)} ${n(T - r)} c`,
+      `${n(x)} ${n(b + r)} l`, `${n(x)} ${n(b + r - k)} ${n(x + r - k)} ${n(b)} ${n(x + r)} ${n(b)} c h`].join(' ');
+  }
+  function box(x, top, w, h, { fill, stroke, lw = 0.75, r = 0 } = {}) {
+    ops.push(`${fill ? rgb(fill) + ' rg ' : ''}${stroke ? rgb(stroke) + ' RG ' + n(lw) + ' w ' : ''}${path(x, top, w, h, r)} ${fill && stroke ? 'B' : fill ? 'f' : 'S'}`);
+  }
+  function rule(x1, top, x2, color, lw) { ops.push(`${rgb(color)} RG ${n(lw)} w ${n(x1)} ${n(fy(top))} m ${n(x2)} ${n(fy(top))} l S`); }
+  // `mid` = vertical centre of the text line
+  function text(str, x, mid, size, { bold = false, italic = false, color = '#111827' } = {}) {
+    const font = italic ? 'F3' : bold ? 'F2' : 'F1';
+    ops.push(`BT ${rgb(color)} rg /${font} ${n(size)} Tf ${n(x)} ${n(fy(mid + size * 0.35))} Td (${pdfEsc(str)}) Tj ET`);
+  }
+  function star(cx, cy, R, color) {
+    const pts = Array.from({ length: 10 }, (_, i) => {
+      const a = -Math.PI / 2 + i * Math.PI / 5, rad = i % 2 ? R * 0.42 : R;
+      return `${n(cx + rad * Math.cos(a))} ${n(fy(cy + rad * Math.sin(a)))}`;
+    });
+    ops.push(`${rgb(color)} rg ${pts[0]} m ${pts.slice(1).map(p => p + ' l').join(' ')} h f`);
+  }
+  const ensure = h => { if (y + h > LIMIT) newPage(); };
+
+  // ── data ──
+  const sorted = status => board.cards.filter(c => c.status === status)
+    .sort((a, b) => (a.sortOrder ?? a.createdAt) - (b.sortOrder ?? b.createdAt));
+  const today = `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+  const niceDate = iso => pdfClean(new Date(`${iso}T00:00:00`).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }));
+  const when = pdfClean(d.toLocaleString(undefined, { dateStyle: 'long', timeStyle: 'short' }));
+  const counts = Object.fromEntries(REPORT_SECTIONS.map(([s]) => [s, sorted(s).length]));
+  const active = counts.todo + counts.inprogress + counts.done;
+  const pct = active ? Math.round(counts.done / active * 100) : 0;
+  const accent = boardColor(board);
+
+  newPage();
+
+  // ── header ──
+  const titleLines = pdfWrap(board.name, 22, true, CW - 18, 3);
+  const headH = 12 + titleLines.length * 27 + 16;
+  box(M, y, 5, headH, { fill: accent });
+  text('TASKBOARDS SNAPSHOT', M + 16, y + 6, 8, { bold: true, color: GRAY });
+  titleLines.forEach((l, i) => text(l, M + 16, y + 12 + i * 27 + 14, 22, { bold: true }));
+  text(when, M + 16, y + 12 + titleLines.length * 27 + 8, 9, { color: GRAY });
+  y += headH + 16;
+
+  // ── stat tiles ──
+  const gap = 8, tw = (CW - 3 * gap) / 4;
+  REPORT_SECTIONS.forEach(([s, label], i) => {
+    const x = M + i * (tw + gap);
+    box(x, y, tw, 48, { fill: '#ffffff', stroke: LINE, r: 4 });
+    box(x + 4, y, tw - 8, 3, { fill: REPORT_COLORS[s] });
+    text(String(counts[s]), x + 10, y + 22, 19, { bold: true, color: REPORT_COLORS[s] });
+    text(label.toUpperCase(), x + 10, y + 39, 7.5, { bold: true, color: GRAY });
+  });
+  y += 48 + 14;
+
+  // ── progress ──
+  const label = pdfClean(`${pct}% done · ${counts.done} of ${active} cards`);
+  const barW = CW - pdfTextWidth(label, 8.5, false) - 12;
+  box(M, y, barW, 6, { fill: LINE, r: 3 });
+  if (pct) box(M, y, Math.max(6, barW * pct / 100), 6, { fill: REPORT_COLORS.done, r: 3 });
+  text(label, M + barW + 12, y + 3, 8.5, { color: GRAY });
+  y += 6 + 22;
+
+  // ── cards ──
+  const PAD = 8, TITLE_LH = 13, NOTE_LH = 11.5, PILL_H = 13, PILL_GAP = 5;
+  function layoutCard(c, status) {
+    const innerW = CW - 3 - PAD * 2;
+    const title = pdfWrap(c.title || 'Untitled', 10.5, true, innerW, 6);
+    const pills = [];
+    if (c.owner) pills.push({ label: pdfClean(c.owner), kind: 'plain' });
+    if (c.dueDate) {
+      const late = c.dueDate < today && status !== 'done' && status !== 'archive';
+      pills.push({ label: `${late ? 'Overdue · ' : 'Due '}${niceDate(c.dueDate)}`, kind: late ? 'late' : 'plain' });
+    }
+    if (c.effort === 'low' && c.impact === 'high') pills.push({ label: 'Quick win', kind: 'win' });
+    else {
+      if (c.impact) pills.push({ label: `Impact: ${pdfClean(c.impact)}`, kind: 'plain' });
+      if (c.effort) pills.push({ label: `Effort: ${pdfClean(c.effort)}`, kind: 'plain' });
+    }
+    pills.forEach(p => { p.w = pdfTextWidth(p.label, 8, false) + 12 + (p.kind === 'win' ? 11 : 0); p.w = Math.min(p.w, innerW); });
+    const rows = [];
+    for (const p of pills) {
+      const row = rows[rows.length - 1];
+      if (row && row.w + PILL_GAP + p.w <= innerW) { row.items.push(p); row.w += PILL_GAP + p.w; }
+      else rows.push({ items: [p], w: p.w });
+    }
+    const note = c.note ? pdfWrap(c.note, 9, false, innerW - 8, 45) : [];
+    const h = PAD + title.length * TITLE_LH + (rows.length ? 4 + rows.length * PILL_H + (rows.length - 1) * 3 : 0)
+            + (note.length ? 5 + note.length * NOTE_LH : 0) + PAD - 1;
+    return { title, rows, note, h };
+  }
+
+  function drawCard(c, status, L) {
+    const color = REPORT_COLORS[status], x = M, ix = M + 3 + PAD, innerW = CW - 3 - PAD * 2;
+    box(x, y, CW, L.h, { fill: '#ffffff', stroke: LINE });
+    box(x, y, 3, L.h, { fill: color });
+    let cy = y + PAD;
+    const muted = status === 'done';
+    L.title.forEach((line, i) => {
+      const mid = cy + i * TITLE_LH + TITLE_LH / 2;
+      text(line, ix, mid, 10.5, { bold: true, color: muted ? GRAY : '#111827' });
+      if (muted) rule(ix, mid - 1, ix + pdfTextWidth(line, 10.5, true), '#9ca3af', 0.7);
+    });
+    cy += L.title.length * TITLE_LH;
+    if (L.rows.length) {
+      cy += 4;
+      for (const row of L.rows) {
+        let px = ix;
+        for (const p of row.items) {
+          const st = { plain: ['#f9fafb', '#d1d5db', '#374151'], late: ['#fef2f2', '#fca5a5', '#b91c1c'], win: ['#fffbeb', '#fcd34d', '#92400e'] }[p.kind];
+          box(px, cy, p.w, PILL_H, { fill: st[0], stroke: st[1], lw: 0.6, r: PILL_H / 2 });
+          if (p.kind === 'win') star(px + 9, cy + PILL_H / 2, 3.3, '#d97706');
+          text(p.label, px + (p.kind === 'win' ? 17 : 6), cy + PILL_H / 2, 8, { bold: p.kind !== 'plain', color: st[2] });
+          px += p.w + PILL_GAP;
+        }
+        cy += PILL_H + 3;
+      }
+      cy -= 3;
+    }
+    if (L.note.length) {
+      cy += 5;
+      box(ix, cy, 1.5, L.note.length * NOTE_LH, { fill: LINE });
+      L.note.forEach((line, i) => text(line, ix + 7, cy + i * NOTE_LH + NOTE_LH / 2, 9, { color: '#4b5563' }));
+    }
+    y += L.h + 5;
+  }
+
+  for (const [status, name] of REPORT_SECTIONS) {
+    const cards = sorted(status);
+    const layouts = cards.map(c => layoutCard(c, status));
+    ensure(28 + (layouts[0] ? layouts[0].h : 18));          // a heading never sits alone at the foot of a page
+    const color = REPORT_COLORS[status];
+    text(name, M, y + 8, 12.5, { bold: true, color });
+    text(String(cards.length), M + pdfTextWidth(name, 12.5, true) + 7, y + 8, 9, { bold: true, color: GRAY });
+    rule(M, y + 18, M + CW, color, 1.2);
+    y += 26;
+    if (!cards.length) { text('No cards', M, y + 5, 9.5, { italic: true, color: '#9ca3af' }); y += 22; continue; }
+    cards.forEach((c, i) => { ensure(layouts[i].h + 5); drawCard(c, status, layouts[i]); });
+    y += 9;
+  }
+
+  // ── footer on every page ──
+  const foot = pdfClean(board.name);
+  pages.forEach((p, i) => {
+    ops = p;
+    rule(M, PH - 38, M + CW, LINE, 0.75);
+    const right = `Taskboards · ${today} · Page ${i + 1} of ${pages.length}`;
+    const maxLeft = CW - pdfTextWidth(right, 7.5, false) - 16;
+    let left = foot;
+    while (left.length > 1 && pdfTextWidth(left, 7.5, false) > maxLeft) left = left.slice(0, -1);
+    text(left === foot ? left : left.replace(/.$/, '') + '...', M, PH - 28, 7.5, { color: '#9ca3af' });
+    text(right, M + CW - pdfTextWidth(right, 7.5, false), PH - 28, 7.5, { color: '#9ca3af' });
+  });
+
+  // ── file ──
+  let out = '%PDF-1.4\n';
+  const offsets = [];
+  const add = (num, body) => { offsets[num] = out.length; out += `${num} 0 obj\n${body}\nendobj\n`; };
+  const count = 6 + pages.length * 2;
+  add(1, '<< /Type /Catalog /Pages 2 0 R >>');
+  add(2, `<< /Type /Pages /Kids [${pages.map((_, i) => `${7 + i * 2} 0 R`).join(' ')}] /Count ${pages.length} >>`);
+  add(3, '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>');
+  add(4, '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>');
+  add(5, '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Oblique /Encoding /WinAnsiEncoding >>');
+  add(6, `<< /Title (${pdfEsc(pdfClean(board.name))}) /Producer (Taskboards) /CreationDate (D:${d.getFullYear()}${pad2(d.getMonth() + 1)}${pad2(d.getDate())}${pad2(d.getHours())}${pad2(d.getMinutes())}${pad2(d.getSeconds())}) >>`);
+  pages.forEach((p, i) => {
+    const stream = p.join('\n');
+    add(7 + i * 2, `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${PW} ${PH}] /Contents ${8 + i * 2} 0 R /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> >>`);
+    add(8 + i * 2, `<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`);
+  });
+  const xref = out.length;
+  out += `xref\n0 ${count + 1}\n0000000000 65535 f \n`;
+  for (let i = 1; i <= count; i++) out += `${String(offsets[i]).padStart(10, '0')} 00000 n \n`;
+  out += `trailer\n<< /Size ${count + 1} /Root 1 0 R /Info 6 0 R >>\nstartxref\n${xref}\n%%EOF`;
+  return out;   // pure ASCII (every non-ASCII byte is an octal escape), so characters = bytes
+}
 
 // Keep the Drive copy fresh and complete as the tab/device comes and goes
 document.addEventListener('visibilitychange', async () => {
@@ -2582,7 +2855,8 @@ function deleteAllDone() {
   }, 250 + Math.min(els.length, 20) * 25);
 }
 
-q('#done-report-btn').addEventListener('click', e => { e.stopPropagation(); exportReport(); });
+q('#done-report-btn').addEventListener('click', e => { e.stopPropagation(); exportReport('md'); });
+q('#done-pdf-btn').addEventListener('click', e => { e.stopPropagation(); exportReport('pdf'); });
 q('#done-clear-btn').addEventListener('click', e => { e.stopPropagation(); deleteAllDone(); });
 
 // ─── QUICK-WINS MATRIX ────────────────────────────────────────────────────────
