@@ -1,7 +1,7 @@
 'use strict';
 
 // ─── VERSION ─────────────────────────────────────────────────────────────────
-const APP_VERSION = '3.4.0'; // sturdier sign-in: token renewal, no save after a failed load, retry/flush/conflict-safe Drive sync
+const APP_VERSION = '3.5.0'; // team boards: invite by email (editor / viewer), card-level merge over Drive files, behind TEAMS_ENABLED
 console.log('%c TaskBoards v' + APP_VERSION + ' loaded', 'background:#ffa300;color:#000;padding:2px 8px;border-radius:4px;font-weight:bold');
 
 // ─── CONFIG & CONSTANTS ───────────────────────────────────────────────────────
@@ -21,6 +21,10 @@ const AUTH_API          = ((window.TASKBOARDS_CONFIG || {}).AUTH_API || '').repl
 // Public key the viewer page uses to download a shared board. Sharing stays off until it is set.
 const DRIVE_API_KEY     = (window.TASKBOARDS_CONFIG || {}).DRIVE_API_KEY || '';
 
+// Team boards (shared with named people through Drive). Off unless config.js turns it on.
+const TEAMS_ENABLED     = !!(window.TASKBOARDS_CONFIG || {}).TEAMS_ENABLED;
+const PROJECT_NUMBER    = GOOGLE_CLIENT_ID.split('-')[0];   // the Google Cloud project number is the Client ID's prefix (the Picker needs it)
+
 const SUPABASE_URL      = (window.TASKBOARDS_CONFIG || {}).SUPABASE_URL || '';
 const SUPABASE_ANON_KEY = (window.TASKBOARDS_CONFIG || {}).SUPABASE_ANON_KEY || '';
 
@@ -33,7 +37,9 @@ const LS_DIRTY     = 'taskboards-dirty';          // unsynced local edits
 const LS_BASE      = 'taskboards-drive-base';     // Drive modifiedTime our copy is based on
 const LS_HINT      = 'taskboards-login-hint';     // last signed-in profile (no secrets)
 const LS_SUB       = 'taskboards-user-sub';       // owner of the boards in localStorage
-const SS_TOKEN     = 'taskboards-token';          // this tab's access token (sessionStorage)
+const LS_TEAM_STATE = 'taskboards-team-state';    // per team file: Drive version + content we last synced (device-local)
+const LS_PENDING_TEAM = 'taskboards-pending-team'; // team invite waiting to be accepted after sign-in
+const SS_TOKEN     = 'taskboards-token';        // this tab's access token (sessionStorage)
 const TOKEN_SKEW_MS = 5 * 60 * 1000;                // renew this long before expiry
 
 // Safe localStorage read — treats "null"/"undefined" as missing
@@ -338,7 +344,10 @@ async function driveLoadData() {
 
 // Replace the in-memory boards with what Drive holds.
 function applyRemote({ data, modifiedTime }) {
+  const before = new Map(boards.map(b => [b.id, b]));
   boards = data.boards.length ? data.boards : [defaultBoard()];
+  // Team boards keep their cards in their own shared file, not in this one: carry over what we hold
+  boards.forEach(b => { if (b.team) { const o = before.get(b.id); b.cards = o?.team ? o.cards : (b.cards || []); b.tomb = o?.tomb || b.tomb || {}; } });
   currentBoardId = boards.find(b => b.id === data.currentBoardId) ? data.currentBoardId : boards[0].id;
   tabPage = Math.min(tabPage, Math.floor((boards.length - 1) / dynamicTabsPerPage));
   saveToLocal();
@@ -361,7 +370,9 @@ function keepLocalOnConflict() {
 // One save attempt. Throws on failure; resolves quietly if Drive's version won.
 async function driveWrite() {
   const seq     = changeSeq;
-  const payload = JSON.stringify({ boards, currentBoardId, savedAt: Date.now() });
+  // Team boards live in their own shared file: this private file only remembers which ones you belong to
+  const mine    = boards.map(b => b.team ? { ...b, cards: [], tomb: undefined } : b);
+  const payload = JSON.stringify({ boards: mine, currentBoardId, savedAt: Date.now() });
 
   let file = driveFileId ? { id: driveFileId } : await driveFindFile();
   if (file) {
@@ -937,7 +948,7 @@ async function loadUser() {
 }
 
 function resetLocalData() {
-  [LS_BOARDS, LS_CURRENT, LS_DRIVE_FID, LS_DIRTY, LS_BASE].forEach(k => lsDel(k));
+  [LS_BOARDS, LS_CURRENT, LS_DRIVE_FID, LS_DIRTY, LS_BASE, LS_TEAM_STATE, LS_PENDING_TEAM].forEach(k => lsDel(k));
   driveFileId = null;
   driveModified = null;
   changeSeq = savedSeq = 0;
@@ -991,6 +1002,7 @@ async function bootData(quiet = false) {
     }
     else setSyncStatus('synced', 'Loaded from Drive ✓');
     publishShares();
+    teamAfterBoot();
   } catch (err) {
     console.error('bootData error:', err.message);
     showSkeleton(false);
@@ -1118,15 +1130,19 @@ async function importBackup(file) {
   // Public links belong to the boards they were made for: keep them for boards that are
   // still in the file, and take the rest offline rather than leave them orphaned.
   const current = new Map(boards.map(b => [b.id, b]));
-  imported.forEach(b => { const o = current.get(b.id); if (o?.share) b.share = o.share; });
+  imported.forEach(b => { const o = current.get(b.id); if (o?.share) b.share = o.share; if (o?.team) { b.team = o.team; b.cards = o.cards; b.tomb = o.tomb; } });
   const kept = new Set(imported.filter(b => b.share).map(b => b.share.fileId));
   const orphaned = boards.filter(b => b.share?.fileId && !kept.has(b.share.fileId));
+  const teamKept = new Set(imported.filter(b => b.team).map(b => b.team.fileId));
+  const teamGone = boards.filter(b => b.team && !teamKept.has(b.team.fileId));
   if (!confirm(
     `Replace ALL your current boards with the ${imported.length} board(s) and ${nCards} card(s) in "${file.name}"?\n\n` +
     (orphaned.length ? `${orphaned.length} shared board(s) will stop being shared.\n\n` : '') +
+    (teamGone.length ? `${teamGone.length} team board(s) will be removed from your account${teamGone.some(b => b.team.role === 'owner') ? ' (the ones you own are deleted for everyone)' : ''}.\n\n` : '') +
     'Tip: export a backup of your current boards first — this can’t be undone.'
   )) return;
   orphaned.forEach(b => queueRevoke(b.share.fileId));
+  teamGone.forEach(b => { if (b.team.role === 'owner') queueRevoke(b.team.fileId); teamStateDel(b.team.fileId); });
 
   boards = imported;
   currentBoardId = imported.find(b => b.id === parsed?.currentBoardId)?.id || imported[0].id;
@@ -1539,7 +1555,7 @@ function buildReportPdf(board, d) {
 document.addEventListener('visibilitychange', async () => {
   if (!driveReady) return;
   if (document.visibilityState === 'hidden') { flushSave(); return; }
-  if (await ensureToken()) driveRefreshIfNewer();
+  if (await ensureToken()) { driveRefreshIfNewer(); syncTeams(); }
   else if (!authTransient) requestReconnect();
 });
 window.addEventListener('pagehide', flushSave);
@@ -1547,6 +1563,7 @@ window.addEventListener('online', () => {
   if (offlineMode) { showToast('Back online — syncing…', 'info'); reconcile(); return; }
   if (driveReady && isDirty()) driveSaveData();
   publishShares();
+  syncTeams();
 });
 window.addEventListener('offline', () => {
   if (!driveReady) return;
@@ -1730,46 +1747,39 @@ async function copyText(text) {
 const shareBoard = () => boards.find(b => b.id === shareModalBoardId);
 
 function openShareModal(boardId) {
+  inviteOpen = false;
   shareModalBoardId = boardId;
+  teamMembers = null;
   renderShareModal();
   q('#share-overlay').classList.remove('hidden');
+  const b = shareBoard();
+  if (TEAMS_ENABLED && b?.team?.role === 'owner') teamLoadMembers(b);
 }
 function closeShareModal() {
   q('#share-overlay').classList.add('hidden');
   shareModalBoardId = null;
+  inviteOpen = false;
 }
 
 // state: { busy: 'text' } | { needScope: true } | { error: 'text' }
-function renderShareModal(state = {}) {
-  const board = shareBoard();
-  if (!board) { closeShareModal(); return; }
-  const body = q('#share-body');
-  q('#share-title').innerHTML = board.share ? `${ICON_ROCKET} PUBLIC BOARD` : `${ICON_LOCK} PRIVATE BOARD`;
-
-  if (state.busy) { body.innerHTML = `<p class="share__text">${esc(state.busy)}</p>`; return; }
-
-  const err = state.error ? `<p class="share__error">${esc(state.error)}</p>` : '';
-
+function publicShareHtml(board, state) {
   if (!board.share && !DRIVE_API_KEY) {
-    body.innerHTML = `
+    return `
       <p class="share__text">Only you can see <strong>${esc(board.name)}</strong>.</p>
       <p class="share__note">Board sharing isn’t enabled on this site yet.</p>`;
-    return;
   }
 
   if (!board.share) {
-    body.innerHTML = `
-      <p class="share__text">Only you can see <strong>${esc(board.name)}</strong>.</p>
+    return `
+      <p class="share__text">${board.team ? 'Nobody outside the team can see' : 'Only you can see'} <strong>${esc(board.name)}</strong>.</p>
       <p class="share__text share__text--dim">Share a read-only link: anyone with the link <em>and</em> the passphrase can see the latest version of this board. Your other boards stay private.</p>
       ${state.needScope ? '<p class="share__note">Sharing needs one more Google permission — to create the shared copy of this board in your Drive.</p>' : ''}
-      ${err}
       <div class="share__actions">
         <button class="modal__submit" data-act="${state.needScope ? 'grant' : 'create'}">${state.needScope ? 'GRANT PERMISSION' : 'SHARE LINK'}</button>
       </div>`;
-    return;
   }
 
-  body.innerHTML = `
+  return `
     <div class="modal__field">
       <label class="modal__label" for="share-link">LINK</label>
       <div class="share__row"><input class="modal__input" id="share-link" readonly value="${esc(shareUrl(board))}" /><button class="share__copy" data-act="copy" data-target="share-link">COPY</button></div>
@@ -1779,11 +1789,23 @@ function renderShareModal(state = {}) {
       <div class="share__row"><input class="modal__input share__pass" id="share-pass" readonly value="${esc(board.share.passphrase)}" /><button class="share__copy" data-act="copy" data-target="share-pass">COPY</button></div>
     </div>
     <p class="share__text share__text--dim">Read-only. Viewers see the latest version of <strong>${esc(board.name)}</strong> — your edits are published within seconds. Only this board is shared.</p>
-    ${err}
     <div class="share__actions">
       <button class="modal__submit" data-act="copy-all">COPY SHARE DETAILS</button>
       <button class="modal__submit modal__submit--danger" data-act="revoke">REVOKE PUBLIC ACCESS</button>
     </div>`;
+}
+
+function renderShareModal(state = {}) {
+  const board = shareBoard();
+  if (!board) { closeShareModal(); return; }
+  const body = q('#share-body');
+  q('#share-title').innerHTML = board.team ? `${ICON_TEAM} TEAM BOARD` : board.share ? `${ICON_ROCKET} PUBLIC BOARD` : `${ICON_LOCK} PRIVATE BOARD`;
+
+  if (state.busy) { body.innerHTML = `<p class="share__text">${esc(state.busy)}</p>`; return; }
+
+  const err    = state.error ? `<p class="share__error">${esc(state.error)}</p>` : '';
+  const member = board.team && board.team.role !== 'owner';   // only the owner publishes public links
+  body.innerHTML = err + (member ? '' : publicShareHtml(board, state)) + teamSectionHtml(board, state);
 }
 
 function shareErrorState(e) {
@@ -1792,9 +1814,11 @@ function shareErrorState(e) {
   return { error: 'Couldn’t reach Google Drive — check your connection and try again. Nothing was changed.' };
 }
 
-async function onShareAction(act, target) {
+async function onShareAction(act, target, el) {
+  if (inviteOpen) { onInviteAction(act); return; }
   const board = shareBoard();
   if (!board) return;
+  if (act.startsWith('team-')) { onTeamAction(act, board, el); return; }
 
   if (act === 'copy') {
     const ok = await copyText(q('#' + target).value);
@@ -1842,17 +1866,468 @@ async function onShareAction(act, target) {
 
 q('#share-body').addEventListener('click', e => {
   const btn = e.target.closest('[data-act]');
-  if (btn) onShareAction(btn.dataset.act, btn.dataset.target);
+  if (btn) onShareAction(btn.dataset.act, btn.dataset.target, btn);
 });
 q('#share-close').addEventListener('click', closeShareModal);
 q('#share-overlay').addEventListener('click', e => { if (e.target === q('#share-overlay')) closeShareModal(); });
-document.addEventListener('keydown', e => { if (e.key === 'Escape' && shareModalBoardId) closeShareModal(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && (shareModalBoardId || inviteOpen)) closeShareModal(); });
+
+// ─── TEAM BOARDS ──────────────────────────────────────────────────────────────
+// A team board is ONE Drive file, created by the owner's Taskboards and shared with the people they
+// invite (Drive permissions: writer = editor, reader = viewer). Taskboards has no server for it:
+//  • Everyone's private file only remembers `board.team = {fileId, role, owner}`; the cards live in the team file.
+//  • Sync is poll + merge: every ~30 s (and ~1.5 s after a local edit) each member fetches the file if it changed,
+//    merges card by card (newest `updatedAt` wins; deletions are tombstones) and writes back if they added something.
+//  • Recipients of the invite open the file once through Google's Picker: with the `drive.file` scope the app
+//    only reaches files the user explicitly handed to it, so no broader Drive permission is ever requested.
+// Per-device sync info (Drive version + content signature) lives in LS_TEAM_STATE, never in the Drive file.
+const TEAM_POLL_MS   = 30000;
+const TEAM_TOMB_MAX  = 30 * 86400000;   // forget deletions after 30 days
+const TEAM_PREFIX    = 'Taskboards team — ';
+let teamSyncing = false, teamQueued = false, teamTimer = null;
+let teamMembers = null;                 // null = loading, [] = none (owner's share dialog)
+let inviteOpen  = false;
+
+function canEdit(board = currentBoard()) { return !board?.team || board.team.role !== 'viewer'; }
+function requireEdit(board = currentBoard()) {
+  if (canEdit(board)) return true;
+  showToast('View only — you’re a viewer of this team board', 'info');
+  return false;
+}
+function tombstone(board, ids) {
+  if (!board?.team) return;
+  board.tomb = board.tomb || {};
+  for (const id of ids) board.tomb[id] = Date.now();
+}
+
+function teamStateAll() { try { return JSON.parse(lsGet(LS_TEAM_STATE)) || {}; } catch { return {}; } }
+const teamStateGet = id => teamStateAll()[id] || {};
+function teamStateSet(id, patch) { const all = teamStateAll(); all[id] = { ...all[id], ...patch }; lsSet(LS_TEAM_STATE, JSON.stringify(all)); }
+function teamStateDel(id) { const all = teamStateAll(); delete all[id]; lsSet(LS_TEAM_STATE, JSON.stringify(all)); }
+
+const teamInviteUrl = fileId => `${location.origin}/app.html?team=${encodeURIComponent(fileId)}`;
+
+// Order-independent fingerprint of a board's shared content (key order must not matter, or two
+// devices would keep re-uploading each other's identical data).
+function teamSig(name, cards, tomb) {
+  const rows = [...cards].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
+    .map(c => [c.id, c.title, c.owner || '', c.dueDate || '', c.status, c.sortOrder ?? null, c.note || '', c.effort || '', c.impact || '', c.createdAt || 0, c.updatedAt || 0]);
+  return JSON.stringify([name, rows, Object.entries(tomb || {}).sort()]);
+}
+
+// Reads a team file's JSON into trusted board fields; throws if it isn't a Taskboards team file.
+function teamParseDoc(doc) {
+  if (!doc || typeof doc !== 'object' || !Array.isArray(doc.cards)) throw new Error('not a team board');
+  const tomb = {};
+  if (doc.tomb && typeof doc.tomb === 'object') for (const [id, t] of Object.entries(doc.tomb)) if (Number.isFinite(t)) tomb[id] = t;
+  const name = typeof doc.name === 'string' && doc.name.trim() ? doc.name.trim().slice(0, 80) : 'Team board';
+  return { name, cards: TBShare.cleanCards(doc.cards, uid), tomb };
+}
+
+// Card-by-card merge. Newest `updatedAt` wins; a deletion beats any version of the card that is not newer than it.
+function mergeTeamBoard(board, remote, { owner, writable }) {
+  if (!owner) board.name = remote.name;           // only the owner renames a team board
+  if (!writable) { board.cards = remote.cards; board.tomb = remote.tomb; return; }   // viewers just mirror
+  const stamp = c => c.updatedAt ?? c.createdAt ?? 0;
+  const tomb  = { ...remote.tomb };
+  for (const [id, t] of Object.entries(board.tomb || {})) tomb[id] = Math.max(tomb[id] || 0, t);
+  const byId = new Map(board.cards.map(c => [c.id, c]));
+  for (const c of remote.cards) { const mine = byId.get(c.id); if (!mine || stamp(c) > stamp(mine)) byId.set(c.id, c); }
+  const now = Date.now();
+  for (const [id, t] of Object.entries(tomb)) {
+    const c = byId.get(id);
+    if (c && stamp(c) <= t) byId.delete(id);
+    if (now - t > TEAM_TOMB_MAX) delete tomb[id];
+  }
+  board.cards = [...byId.values()];
+  board.tomb  = tomb;
+}
+
+// Did Drive say the file is gone / no longer ours (as opposed to a passing error)?
+async function teamAccessGone(resp) {
+  if (resp.status === 404) return true;
+  if (resp.status !== 403) return false;
+  const body = await resp.json().catch(() => ({}));
+  const reason = body?.error?.errors?.[0]?.reason || '';
+  return !/rateLimit|dailyLimit|quota/i.test(reason);
+}
+
+// The file was deleted or the owner revoked our access: keep what we have as a private board.
+function teamLost(board) {
+  teamStateDel(board.team.fileId);
+  board.team = null;
+  delete board.tomb;
+  onDataChanged();
+  renderTabs();
+  if (board.id === currentBoardId) renderBoard();
+  showToast(`“${board.name}” is no longer shared with you — you keep a private copy`, 'info');
+}
+
+function renderTeamBoardSoon() {
+  if (dragState || deleteCardId || !q('#modal-overlay').classList.contains('hidden')) { setTimeout(renderTeamBoardSoon, 1200); return; }   // never pull the card out from under a gesture
+  renderTabs();
+  renderOwnerFilterChips();
+  renderBoard();
+}
+
+async function teamSyncOne(board) {
+  const t = board.team, id = t.fileId;
+  const owner = t.role === 'owner', writable = t.role !== 'viewer';
+  let st = teamStateGet(id);
+
+  const m = await driveFetch(`${DRIVE_API}/files/${id}?fields=modifiedTime,trashed`);
+  if (!m.ok) { if (await teamAccessGone(m)) return teamLost(board); throw new Error(`team check ${m.status}`); }
+  const meta = await m.json();
+  if (meta.trashed) return teamLost(board);
+
+  let changed = false;
+  if (!st.base || Date.parse(meta.modifiedTime) > Date.parse(st.base)) {
+    const r = await driveFetch(`${DRIVE_API}/files/${id}?alt=media`);
+    if (!r.ok) { if (await teamAccessGone(r)) return teamLost(board); throw new Error(`team load ${r.status}`); }
+    const remote = teamParseDoc(await r.json());
+    const before = teamSig(board.name, board.cards, board.tomb);
+    mergeTeamBoard(board, remote, { owner, writable });
+    st = { base: meta.modifiedTime, sig: teamSig(remote.name, remote.cards, remote.tomb), name: remote.name };
+    teamStateSet(id, st);
+    changed = teamSig(board.name, board.cards, board.tomb) !== before;
+    if (changed) saveToLocal();
+  }
+
+  // Write back what the file doesn't have yet (viewers never write)
+  const docName = owner ? board.name : (st.name || board.name);
+  if (writable && teamSig(docName, board.cards, board.tomb) !== st.sig) {
+    const body = JSON.stringify({ v: 1, name: docName, cards: board.cards, tomb: board.tomb || {}, savedAt: Date.now() });
+    const r = await driveFetch(`${DRIVE_UPLOAD_API}/files/${id}?uploadType=media&fields=modifiedTime`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body,
+      keepalive: body.length < 60000
+    });
+    if (!r.ok) { if (await teamAccessGone(r)) return teamLost(board); throw new Error(`team save ${r.status}`); }
+    const { modifiedTime } = await r.json();
+    teamStateSet(id, { base: modifiedTime, sig: teamSig(docName, board.cards, board.tomb), name: docName });
+  }
+
+  if (changed && board.id === currentBoardId) renderTeamBoardSoon();
+  else if (changed) renderTabs();
+}
+
+async function syncTeams() {
+  if (!TEAMS_ENABLED || !driveReady || needsReauth || !navigator.onLine || !boards.some(b => b.team)) return;
+  if (teamSyncing) { teamQueued = true; return; }
+  teamSyncing = true;
+  try {
+    for (const b of boards.filter(b => b.team)) {
+      try { await teamSyncOne(b); }
+      catch (e) { if (e instanceof AuthError) throw e; console.warn('team sync failed (will retry):', e.message); }
+    }
+  } catch (e) {
+    if (e instanceof AuthError) requestReconnect(); else console.warn('team sync error:', e.message);
+  } finally {
+    teamSyncing = false;
+    if (teamQueued) { teamQueued = false; scheduleTeamSync(); }
+  }
+}
+
+function scheduleTeamSync() {
+  if (!TEAMS_ENABLED || !boards.some(b => b.team)) return;
+  clearTimeout(teamTimer);
+  teamTimer = setTimeout(syncTeams, 1500);
+}
+
+setInterval(() => { if (document.visibilityState === 'visible') syncTeams(); }, TEAM_POLL_MS);
+
+// After sign-in: pull every team board, and offer a pending invitation
+function teamAfterBoot() {
+  if (!TEAMS_ENABLED) return;
+  syncTeams();
+  if (lsGet(LS_PENDING_TEAM)) openInviteModal();
+}
+
+// ── owner: make a board a team board, invite, remove ─────────────────────────
+async function teamCreate(board) {
+  if (!hasShareScope()) throw new ShareError('scope');
+  const doc = { v: 1, name: board.name, cards: board.cards, tomb: {}, savedAt: Date.now() };
+  const boundary = 'taskboards_team_' + Date.now();
+  const multipart = [
+    `--${boundary}`,
+    'Content-Type: application/json; charset=UTF-8',
+    '',
+    JSON.stringify({ name: TEAM_PREFIX + board.name, mimeType: 'application/json' }),
+    `--${boundary}`,
+    'Content-Type: application/json',
+    '',
+    JSON.stringify(doc),
+    `--${boundary}--`
+  ].join('\r\n');
+  const r = await driveFetch(`${DRIVE_UPLOAD_API}/files?uploadType=multipart&fields=id,modifiedTime`, {
+    method: 'POST',
+    headers: { 'Content-Type': `multipart/related; boundary=${boundary}` },
+    body: multipart
+  });
+  if (r.status === 403) throw new ShareError('scope');
+  if (!r.ok) throw new Error(`team create ${r.status}`);
+  const res = await r.json();
+  if (!res.id) throw new Error('no file id');
+  teamStateSet(res.id, { base: res.modifiedTime, sig: teamSig(board.name, board.cards, {}), name: board.name });
+  board.team = { fileId: res.id, role: 'owner', owner: gUser?.email || '' };
+  board.tomb = {};
+  teamMembers = null;
+  onDataChanged();
+  renderTabs();
+}
+
+async function teamLoadMembers(board) {
+  teamMembers = null;
+  try {
+    const r = await driveFetch(`${DRIVE_API}/files/${board.team.fileId}/permissions?fields=permissions(id,emailAddress,role,type)&pageSize=100`);
+    if (!r.ok) throw new Error(`members ${r.status}`);
+    teamMembers = ((await r.json()).permissions || []).filter(p => p.type === 'user');
+  } catch (e) { console.warn('members failed:', e.message); teamMembers = []; }
+  if (shareModalBoardId === board.id) renderShareModal();
+}
+
+async function teamInvite(board, email, role) {
+  const msg = `I’d like you to work on “${board.name}” with me in Taskboards. Open this link, sign in with this Google account and click “Open board”: ${teamInviteUrl(board.team.fileId)}`;
+  const r = await driveFetch(`${DRIVE_API}/files/${board.team.fileId}/permissions?sendNotificationEmail=true&emailMessage=${encodeURIComponent(msg)}&fields=id`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ type: 'user', role: role === 'viewer' ? 'reader' : 'writer', emailAddress: email })
+  });
+  if (r.status === 400) throw new Error('bad-email');
+  if (!r.ok) throw new Error(`invite ${r.status}`);
+}
+
+async function teamRemoveMember(board, permissionId) {
+  const r = await driveFetch(`${DRIVE_API}/files/${board.team.fileId}/permissions/${encodeURIComponent(permissionId)}`, { method: 'DELETE' });
+  if (!r.ok && r.status !== 404) throw new Error(`remove ${r.status}`);
+}
+
+// ── recipient: open the invitation ───────────────────────────────────────────
+function captureTeamInvite() {
+  try {
+    const id = new URLSearchParams(location.search).get('team');
+    if (!id) return;
+    if (TEAMS_ENABLED && /^[\w-]{10,200}$/.test(id)) lsSet(LS_PENDING_TEAM, id);
+    history.replaceState(null, '', location.pathname + location.hash);
+  } catch {}
+}
+
+let pickerLoading = null;
+function loadPicker() {
+  return pickerLoading ||= new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = 'https://apis.google.com/js/api.js';
+    s.onload  = () => window.gapi.load('picker', { callback: resolve, onerror: () => reject(new Error('picker')) });
+    s.onerror = () => { pickerLoading = null; reject(new Error('picker')); };
+    document.head.appendChild(s);
+  });
+}
+
+// Google's file picker, limited to the invited file: choosing it is what grants Taskboards access to that one file
+async function pickTeamFile(fileId) {
+  await loadPicker();
+  const token = await ensureToken();
+  if (!token) throw new AuthError('Session expired');
+  return new Promise((resolve, reject) => {
+    const g = window.google.picker;
+    const view = new g.DocsView(g.ViewId.DOCS).setFileIds(fileId).setIncludeFolders(false);
+    new g.PickerBuilder()
+      .addView(view)
+      .setOAuthToken(token)
+      .setDeveloperKey(DRIVE_API_KEY)
+      .setAppId(PROJECT_NUMBER)
+      .setTitle('Select the shared board')
+      .setCallback(d => {
+        if (d.action === g.Action.PICKED) resolve(d.docs?.[0]?.id);
+        else if (d.action === g.Action.CANCEL) reject(new Error('cancelled'));
+      })
+      .build()
+      .setVisible(true);
+  });
+}
+
+async function teamJoin(fileId) {
+  if (!hasShareScope()) throw new ShareError('scope');
+  await pickTeamFile(fileId);
+  const m = await driveFetch(`${DRIVE_API}/files/${fileId}?fields=modifiedTime,ownedByMe,capabilities(canEdit),owners(emailAddress)`);
+  if (!m.ok) throw new Error(`join ${m.status}`);
+  const meta = await m.json();
+  const r = await driveFetch(`${DRIVE_API}/files/${fileId}?alt=media`);
+  if (!r.ok) throw new Error(`join load ${r.status}`);
+  const remote = teamParseDoc(await r.json());   // refuses anything that isn't a Taskboards team file
+
+  const board = {
+    id: uid(), name: remote.name, cards: remote.cards, tomb: remote.tomb, createdAt: Date.now(),
+    team: { fileId, role: meta.ownedByMe ? 'owner' : meta.capabilities?.canEdit ? 'editor' : 'viewer', owner: meta.owners?.[0]?.emailAddress || '' }
+  };
+  teamStateSet(fileId, { base: meta.modifiedTime, sig: teamSig(remote.name, remote.cards, remote.tomb), name: remote.name });
+  boards.push(board);
+  currentBoardId = board.id;
+  tabPage = Math.floor((boards.length - 1) / dynamicTabsPerPage);
+  lsDel(LS_PENDING_TEAM);
+  onDataChanged();
+  renderTabs();
+  renderOwnerFilterChips();
+  renderBoard();
+}
+
+function teamLeave(board) {
+  if (boards.length <= 1) boards.push(defaultBoard());   // the app always keeps one board
+  deleteBoard(board.id);
+}
+
+// ── dialogs ──────────────────────────────────────────────────────────────────
+function teamSectionHtml(board, state) {
+  if (!TEAMS_ENABLED || !DRIVE_API_KEY) return '';
+  const t = board.team;
+  const grant = state.needScope ? `
+      <p class="share__note">Team boards need one more Google permission — to create and share files in your Drive.</p>
+      <div class="share__actions"><button class="modal__submit" data-act="grant">GRANT PERMISSION</button></div>` : '';
+
+  if (!t) {
+    return `
+      <hr class="share__sep">
+      <div class="modal__label">TEAM</div>
+      <p class="share__text share__text--dim">Work on this board together: invite colleagues by email as editors or viewers. The board becomes a file in your Drive that you share with them — it is not encrypted, so invite only people you trust. They need a Google account.</p>
+      ${board.share ? grant : ''}
+      <div class="share__actions"><button class="modal__submit" data-act="team-create">MAKE TEAM BOARD</button></div>`;
+  }
+
+  if (t.role !== 'owner') {
+    return `
+      <p class="share__text">Team board shared by <strong>${esc(t.owner || 'its owner')}</strong>. You can <strong>${t.role === 'viewer' ? 'view' : 'edit'}</strong> it.</p>
+      <p class="share__text share__text--dim">${t.role === 'viewer' ? 'Changes by the team appear here within about 30 seconds.' : 'Your changes reach the team, and theirs reach you, within about 30 seconds.'}</p>
+      <div class="share__actions"><button class="modal__submit modal__submit--danger" data-act="team-leave">REMOVE FROM MY ACCOUNT</button></div>`;
+  }
+
+  const roleLabel = r => (r === 'owner' ? 'Owner' : r === 'writer' || r === 'fileOrganizer' || r === 'organizer' ? 'Editor' : 'Viewer');
+  const rows = teamMembers === null ? '<p class="share__text share__text--dim">Loading members…</p>'
+    : teamMembers.map(p => `
+        <div class="share__member">
+          <span class="share__member-mail">${esc(p.emailAddress || '')}</span>
+          <span class="share__member-role">${roleLabel(p.role)}</span>
+          ${p.role === 'owner' ? '' : `<button class="share__copy" data-act="team-remove" data-id="${esc(p.id)}" aria-label="Remove ${esc(p.emailAddress || '')}">REMOVE</button>`}
+        </div>`).join('');
+  return `
+    <hr class="share__sep">
+    <div class="modal__label">TEAM</div>
+    <div class="share__members">${rows}</div>
+    <div class="modal__field">
+      <label class="modal__label" for="team-email">INVITE BY EMAIL</label>
+      <div class="share__row">
+        <input class="modal__input" id="team-email" type="email" autocomplete="off" placeholder="name@company.com" />
+        <select class="modal__input share__role" id="team-role" aria-label="Role"><option value="editor">Editor</option><option value="viewer">Viewer</option></select>
+      </div>
+    </div>
+    ${grant}
+    <div class="share__actions"><button class="modal__submit" data-act="team-invite">SEND INVITE</button></div>
+    <div class="modal__field">
+      <label class="modal__label" for="team-link">INVITE LINK</label>
+      <div class="share__row"><input class="modal__input" id="team-link" readonly value="${esc(teamInviteUrl(t.fileId))}" /><button class="share__copy" data-act="copy" data-target="team-link">COPY</button></div>
+    </div>
+    <p class="share__text share__text--dim">The link only opens for people you have invited. Editors change cards; viewers can only look.</p>`;
+}
+
+// state: { busy } | { needScope } | { error }
+function renderInviteModal(state = {}) {
+  inviteOpen = true;
+  shareModalBoardId = null;
+  q('#share-title').innerHTML = `${ICON_TEAM} TEAM INVITATION`;
+  q('#share-overlay').classList.remove('hidden');
+  const body = q('#share-body');
+  if (state.busy) { body.innerHTML = `<p class="share__text">${esc(state.busy)}</p>`; return; }
+  body.innerHTML = `
+    ${state.error ? `<p class="share__error">${esc(state.error)}</p>` : ''}
+    <p class="share__text">You’ve been invited to a shared board.</p>
+    <p class="share__text share__text--dim">Google will ask you to select that one file — that is what lets Taskboards open it. Nothing else in your Drive is touched.</p>
+    ${state.needScope ? '<p class="share__note">First, Taskboards needs one more Google permission — to open files you choose.</p>' : ''}
+    <div class="share__actions">
+      <button class="modal__submit" data-act="${state.needScope ? 'invite-grant' : 'invite-join'}">${state.needScope ? 'GRANT PERMISSION' : 'OPEN BOARD'}</button>
+      <button class="modal__submit modal__submit--danger" data-act="invite-decline">NOT NOW</button>
+    </div>`;
+}
+
+function openInviteModal(state = {}) {
+  const id = lsGet(LS_PENDING_TEAM);
+  if (!id) return;
+  const existing = boards.find(b => b.team?.fileId === id);
+  if (existing) { lsDel(LS_PENDING_TEAM); switchBoard(existing.id); return; }
+  renderInviteModal(hasShareScope() ? state : { ...state, needScope: true });
+}
+
+function inviteErrorState(e) {
+  if (e instanceof ShareError) return { needScope: true };
+  if (e instanceof AuthError) return { error: 'Your Google session expired — reconnect and try again.' };
+  if (e.message === 'cancelled') return { error: 'No file selected. Click OPEN BOARD to try again.' };
+  if (e.message === 'picker') return { error: 'Couldn’t load Google’s file picker — check your connection or content blocker and try again.' };
+  if (e.message === 'not a team board') return { error: 'That link doesn’t point to a Taskboards team board.' };
+  return { error: `Couldn’t open the board. Make sure the owner invited ${gUser?.email || 'this Google account'}, then try again.` };
+}
+
+async function onInviteAction(act) {
+  if (act === 'invite-decline') { lsDel(LS_PENDING_TEAM); closeShareModal(); return; }
+  if (act === 'invite-grant') {
+    flushSave();
+    if (AUTH_API) { startServerLogin(false); return; }
+    renderInviteModal({ busy: 'Waiting for Google…' });
+    const resp = await requestToken('consent', loginHint?.email);
+    renderInviteModal(!resp ? { error: gateErrorMessage(lastAuthError) } : hasShareScope() ? {} : { needScope: true });
+    return;
+  }
+  if (act === 'invite-join') {
+    const id = lsGet(LS_PENDING_TEAM);
+    if (!id) { closeShareModal(); return; }
+    renderInviteModal({ busy: 'Opening the board…' });
+    try { await teamJoin(id); closeShareModal(); showToast('Team board added', 'success'); }
+    catch (e) { console.warn('join failed:', e.message); renderInviteModal(inviteErrorState(e)); }
+  }
+}
+
+async function onTeamAction(act, board, el) {
+  if (act === 'team-create') {
+    if (!driveReady || !navigator.onLine) { renderShareModal({ error: 'Team boards need a connection to Google Drive — try again when you’re online.' }); return; }
+    if (!hasShareScope()) { renderShareModal({ needScope: true }); return; }
+    renderShareModal({ busy: 'Creating the team board…' });
+    try { await teamCreate(board); renderShareModal(); teamLoadMembers(board); showToast('Team board created — invite your team', 'success'); }
+    catch (e) { renderShareModal(shareErrorState(e)); }
+    return;
+  }
+  if (act === 'team-invite') {
+    const email = q('#team-email').value.trim();
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { shakeEl(q('#team-email')); return; }
+    const role = q('#team-role').value;
+    renderShareModal({ busy: `Inviting ${email}…` });
+    try {
+      await teamInvite(board, email, role);
+      showToast(`Invitation sent to ${email}`, 'success');
+      renderShareModal();
+      teamLoadMembers(board);
+    } catch (e) {
+      renderShareModal(e.message === 'bad-email' ? { error: 'Google doesn’t accept that email address.' } : shareErrorState(e));
+    }
+    return;
+  }
+  if (act === 'team-remove') {
+    const p = (teamMembers || []).find(m => m.id === el.dataset.id);
+    if (!p || !confirm(`Remove ${p.emailAddress} from “${board.name}”?\n\nThey lose access to the board right away.`)) return;
+    renderShareModal({ busy: 'Removing…' });
+    try { await teamRemoveMember(board, p.id); showToast('Removed', 'success'); renderShareModal(); teamLoadMembers(board); }
+    catch (e) { renderShareModal(shareErrorState(e)); }
+    return;
+  }
+  if (act === 'team-leave') {
+    if (!confirm(`Remove “${board.name}” from your account?\n\nIt stays available to the rest of the team.`)) return;
+    closeShareModal();
+    teamLeave(board);
+  }
+}
 
 // ─── CHANGE HANDLER ───────────────────────────────────────────────────────────
 function onDataChanged() {
   saveToLocal();
   markDirty();
-  if (driveReady) scheduleDriveSave();
+  if (driveReady) { scheduleDriveSave(); scheduleTeamSync(); }
 }
 
 // ─── BOARD CRUD ───────────────────────────────────────────────────────────────
@@ -1873,6 +2348,8 @@ function deleteBoard(id) {
   if (boards.length <= 1) return;
   const gone = boards.find(b => b.id === id);
   if (gone?.share?.fileId) queueRevoke(gone.share.fileId);   // its public copy goes with it
+  if (gone?.team?.role === 'owner') queueRevoke(gone.team.fileId);   // so does the shared team file
+  if (gone?.team) teamStateDel(gone.team.fileId);
   boards = boards.filter(b => b.id !== id);
   if (currentBoardId === id) currentBoardId = boards[Math.max(0, boards.length-1)].id;
   tabPage = Math.min(tabPage, Math.floor((boards.length-1)/dynamicTabsPerPage));
@@ -1901,9 +2378,10 @@ function renameBoard(id, name) {
 
 // ─── CARD CRUD ────────────────────────────────────────────────────────────────
 function createCard(title, owner, dueDate, status, note = '', effort = '', impact = '') {
+  if (!requireEdit()) return;
   const zoneCards = currentBoard().cards.filter(c => c.status === status);
   const maxOrder  = zoneCards.reduce((m, c) => Math.max(m, c.sortOrder ?? c.createdAt), -1);
-  const card = { id: uid(), title: title.trim(), owner: owner.trim(), dueDate, status, createdAt: Date.now(), sortOrder: maxOrder + 1 };
+  const card = { id: uid(), title: title.trim(), owner: owner.trim(), dueDate, status, createdAt: Date.now(), updatedAt: Date.now(), sortOrder: maxOrder + 1 };
   if (note.trim()) card.note = note.trim();
   if (effort) card.effort = effort;
   if (impact) card.impact = impact;
@@ -1919,12 +2397,13 @@ function createCard(title, owner, dueDate, status, note = '', effort = '', impac
 }
 
 function deleteCard(id) {
+  if (!requireEdit()) return;
   const el = document.querySelector(`.card[data-id="${id}"]`);
   const card = currentBoard()?.cards.find(c => c.id === id);
   const cardTitle = card?.title || 'Card';
   const doDelete = () => {
     const cb = currentBoard();
-    if (cb) cb.cards = cb.cards.filter(c => c.id !== id);
+    if (cb) { cb.cards = cb.cards.filter(c => c.id !== id); tombstone(cb, [id]); }
     deleteCardId = null;
     onDataChanged();
     renderOwnerFilterChips();
@@ -1944,6 +2423,7 @@ function moveCard(id, newStatus) {
 }
 
 function moveOrReorderCard(id, newStatus, insertBeforeId) {
+  if (!requireEdit()) return;
   const cb = currentBoard();
   const card = cb?.cards.find(c => c.id === id);
   if (!card) return;
@@ -1952,6 +2432,7 @@ function moveOrReorderCard(id, newStatus, insertBeforeId) {
 
   // Update status
   card.status = newStatus;
+  card.updatedAt = Date.now();
 
   // Build ordered list for the target zone (exclude the dragged card)
   const zoneCards = cb.cards
@@ -1967,7 +2448,7 @@ function moveOrReorderCard(id, newStatus, insertBeforeId) {
 
   // Insert card at position and reassign sortOrder
   zoneCards.splice(insertIdx, 0, card);
-  zoneCards.forEach((c, i) => { c.sortOrder = i; });
+  zoneCards.forEach((c, i) => { if (c.sortOrder !== i) { c.sortOrder = i; c.updatedAt = Date.now(); } });   // only cards that really moved count as edited
 
   onDataChanged();
   renderBoard();
@@ -2075,7 +2556,7 @@ function renderTabs() {
     tab.style.setProperty('--tab-color', boardColor(board));
     if (tabDrag?.active && tabDrag.id === board.id) tab.classList.add('dragging-source');
     tab.innerHTML = `
-      <button class="board-tab__share" title="${board.share ? 'Public (read-only) — click for share details' : 'Private — click to share'}" aria-label="${board.share ? 'Public board — share details' : 'Private board — share'}">${board.share ? ICON_ROCKET : ICON_LOCK}</button>
+      <button class="board-tab__share" title="${board.team ? 'Team board — click for members' : board.share ? 'Public (read-only) — click for share details' : 'Private — click to share'}" aria-label="${board.team ? 'Team board — members' : board.share ? 'Public board — share details' : 'Private board — share'}">${board.team ? ICON_TEAM : board.share ? ICON_ROCKET : ICON_LOCK}</button>
       <span class="board-tab__name">${esc(board.name)}</span>
       ${boards.length > 1 ? `<button class="board-tab__delete" title="Delete board">✕</button>` : ''}
     `;
@@ -2109,13 +2590,17 @@ function renderTabs() {
     const nameEl = tab.querySelector('.board-tab__name');
     nameEl.addEventListener('dblclick', e => {
       e.stopPropagation();
+      if (board.team && board.team.role !== 'owner') { showToast('Only the owner can rename a team board', 'info'); return; }
       startRename(tab, board.id, nameEl);
     });
 
     // Delete
     tab.querySelector('.board-tab__delete')?.addEventListener('click', e => {
       e.stopPropagation();
-      if (confirm(`Delete board "${board.name}"? All cards will be lost.`)) deleteBoard(board.id);
+      const msg = board.team?.role === 'owner' ? `Delete team board "${board.name}"?\n\nIt is deleted for everyone you invited, too. All cards will be lost.`
+                : board.team ? `Remove team board "${board.name}" from your account?\n\nIt stays available to the rest of the team.`
+                : `Delete board "${board.name}"? All cards will be lost.`;
+      if (confirm(msg)) deleteBoard(board.id);
     });
 
     container.appendChild(tab);
@@ -2393,6 +2878,7 @@ window.addEventListener('resize', () => {
 // ─── RENDER: BOARD ────────────────────────────────────────────────────────────
 function renderBoard() {
   if (dragState) cancelCardDrag();   // the card being dragged is about to be replaced
+  document.body.classList.toggle('board-readonly', !canEdit());
   const cards = currentCards();
   const zones = { todo:[], inprogress:[], archive:[], done:[] };
   const zoneCounts = { todo:0, inprogress:0, archive:0, done:0 };
@@ -2448,7 +2934,8 @@ function renderZone(containerId, zoneCards, compact) {
 const ICON_LOCK   = `<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>`;
 const ICON_SUN    = `<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>`;
 const ICON_MOON   = `<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>`;
-const ICON_ROCKET = `<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2c3 2.5 4.5 6 4.5 9.5V16l2 3h-4L12 22l-2.5-3h-4l2-3v-4.5C7.5 8 9 4.5 12 2z"/><circle cx="12" cy="10" r="1.6"/></svg>`;
+const ICON_TEAM   = `<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3.2"/><path d="M3 20v-1a5 5 0 0 1 5-5h2a5 5 0 0 1 5 5v1"/><circle cx="17" cy="9" r="2.4"/><path d="M17 14a4 4 0 0 1 4 4v2"/></svg>`;
+const ICON_ROCKET =`<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2c3 2.5 4.5 6 4.5 9.5V16l2 3h-4L12 22l-2.5-3h-4l2-3v-4.5C7.5 8 9 4.5 12 2z"/><circle cx="12" cy="10" r="1.6"/></svg>`;
 
 // Shown at the right of a card once it is red (double-click / right-click)
 const ACTIONS_MARKUP = `<div class="card__actions" tabindex="-1">
@@ -2579,6 +3066,7 @@ document.addEventListener('scroll', closeNoteTip, true);
 const LONG_PRESS_MS = 500;
 let lastCardPointerType = 'mouse';
 function armCard(id) {
+  if (!canEdit()) return;
   if (deleteCardId === id) return;
   if (deleteCardId) dismissDelete();
   activateDelete(id);
@@ -2598,6 +3086,7 @@ function onCardDown(e) {
   if (e.target.closest('.card__actions'))  return;
   if (e.button === 2) return;   // right-click arms the card, it must not start a drag
   if (!e.isPrimary) return;     // a second finger must not hijack the gesture in progress
+  if (!canEdit()) return;       // viewers of a team board can look, not move
   if (dragState) cancelCardDrag();   // a stale gesture never outlives a new one
   const cardEl = e.currentTarget, id = cardEl.dataset.id;
   lastCardPointerType = e.pointerType;
@@ -2831,6 +3320,7 @@ q('#done-toggle').addEventListener('click', () => {
 
 // Clear the Done shelf in one go (only the cards the owner filter shows)
 function deleteAllDone() {
+  if (!requireEdit()) return;
   const cb = currentBoard();
   const ids = new Set((cb?.cards || []).filter(c => c.status === 'done' && isCardVisible(c)).map(c => c.id));
   if (!ids.size) { showToast('No done cards to delete', 'info'); return; }
@@ -2848,6 +3338,7 @@ function deleteAllDone() {
   setTimeout(launchConfetti, 250);
   setTimeout(() => {
     cb.cards = cb.cards.filter(c => !ids.has(c.id));
+    tombstone(cb, ids);
     onDataChanged();
     renderOwnerFilterChips();
     renderBoard();
@@ -2958,6 +3449,7 @@ function syncColumnToggle() {
 }
 
 function openModal() {
+  if (!requireEdit()) return;
   editingCardId = null;
   setModalMode(false);
   q('#modal-col-field').hidden = false;
@@ -2974,6 +3466,7 @@ function openModal() {
 
 // Same form as "new card", filled in with the card's current values
 function openEditModal(id) {
+  if (!requireEdit()) return;
   const card = currentCards().find(c => c.id === id);
   if (!card) return;
   dismissDelete();
@@ -3009,8 +3502,10 @@ function showNoteField(show) {
 function closeModal() { q('#modal-overlay').classList.add('hidden'); editingCardId = null; }
 
 function updateCard(id, { title, owner, dueDate, note, status, effort = '', impact = '' }) {
+  if (!requireEdit()) return;
   const card = currentCards().find(c => c.id === id);
   if (!card) return;
+  card.updatedAt = Date.now();
   card.title   = title.trim();
   card.owner   = owner.trim();
   card.dueDate = dueDate;
@@ -3157,6 +3652,7 @@ if ('serviceWorker' in navigator) {
 initTheme();
 createSkeletonLoader();
 selectedOwners = loadSelectedOwners(); // Load saved filter preferences
+captureTeamInvite();                   // ?team=<fileId> from an invitation email: remembered until sign-in is done
 boards = loadFromLocal();
 currentBoardId = localStorage.getItem(LS_CURRENT) || boards[0]?.id;
 if (!boards.find(b=>b.id===currentBoardId)) currentBoardId = boards[0]?.id;

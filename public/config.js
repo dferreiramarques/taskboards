@@ -35,6 +35,13 @@ window.TASKBOARDS_CONFIG = {
   // Leave blank to switch the viewer off.
   DRIVE_API_KEY: 'AIzaSyBd5VnGL_eTpuKLwrdclLCmakzVXqsu2Og',
 
+  // ─── Team boards (beta) ───────────────────────────────────────────────────
+  // Invite people by email to edit (or just view) a board together. The board is a file in the owner's
+  // Drive shared with them; Taskboards still has no database. Needs: Google Picker API enabled in the
+  // Cloud project (APIs & Services → Library) and DRIVE_API_KEY allowed to call it. Only on localhost
+  // until it is switched on for real: set to true (or a hostname test) to open it up.
+  TEAMS_ENABLED: ['localhost', '127.0.0.1'].includes(location.hostname),
+
   // ─── Waitlist / demo requests on the landing page (optional) ──────────────
   // A form endpoint that accepts a JSON POST (Formspree, for example). Leave blank to
   // hide the waitlist form. Submissions are tagged "Taskboards: waitlist / demo request".

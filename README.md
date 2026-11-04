@@ -116,6 +116,25 @@ Each board has a lock in its tab: **🔒 private** (default) or **🚀 public**.
 
 ---
 
+## Team boards (beta, behind `TEAMS_ENABLED`)
+
+A board owner can invite people **by email** to edit it (**editor**) or only look (**viewer**). There is still no Taskboards database: a team board is **one extra file in the owner's Drive**, shared with the invited addresses through normal Drive permissions.
+
+- **Owner:** click the lock/rocket on a board's tab → *Make team board* → invite by email (or remove people). The invitee gets Google's share email plus a link `app.html?team=<fileId>`.
+- **Invitee:** opens the link, signs in, clicks *Open board* and picks the single file in Google's file picker. That pick is what lets the `drive.file` scope reach it — no broader Drive access is ever requested. The board then shows up as a normal tab (with a team icon).
+- **Sync:** each member polls every ~30 s (and ~1.5 s after an edit). Cards are merged one by one — newest `updatedAt` wins, deletions are tombstones — so two people editing different cards never overwrite each other. Viewers never write. If access is revoked or the file is deleted, the board stays as a private copy.
+- **Not encrypted:** unlike public links, the team file is readable by anyone it is shared with (and by Google). The privacy policy says so.
+
+**Turn it on**
+
+1. Google Cloud Console → *APIs & Services → Library* → enable **Google Picker API**; allow it on `DRIVE_API_KEY` too if the key is API-restricted.
+2. In `public/config.js` set `TEAMS_ENABLED: true` (by default it is on only for `localhost`).
+3. The Picker's `appId` is the Cloud project number, taken from the Client ID prefix — nothing to configure.
+
+Not included yet: seats, billing and per-team admin; the Teams plan on the landing page still says "Coming soon".
+
+---
+
 ## Roadmap (shown from Roadmaps)
 
 The roadmap of each product is **edited in the separate Roadmaps app** (its own repository, hosted on Railway). Taskboards only *shows* it:

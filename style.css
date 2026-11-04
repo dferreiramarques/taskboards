@@ -1180,6 +1180,18 @@ body.done-expanded .fab { bottom: calc(300px + 24px); }
 }
 .share__copy:hover { background: var(--f-bg3); color: var(--f-fg1); }
 .share__actions { display: flex; flex-direction: column; gap: 8px; margin-top: 2px; }
+.share__sep { border: 0; border-top: 1px solid var(--f-stroke2); margin: 6px 0 2px; }
+.share__members { display: flex; flex-direction: column; gap: 6px; }
+.share__member { display: flex; align-items: center; gap: 8px; font-size: .75rem; color: var(--f-fg2); }
+.share__member-mail { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--f-fg1); }
+.share__member-role { flex-shrink: 0; color: var(--f-fg3); }
+.share__member .share__copy { padding: 4px 10px; }
+.share__role { flex: 0 0 auto; width: auto; }
+
+/* Viewer of a team board: look, don't touch */
+body.board-readonly #fab,
+body.board-readonly #done-clear-btn { display: none; }
+body.board-readonly .card { cursor: default; }
 
 /* ══════════════════════════════════════════════════════
    HELP MODAL
