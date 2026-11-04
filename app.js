@@ -45,6 +45,7 @@ function lsSet(key, val) { localStorage.setItem(key, val); }
 function lsDel(key)      { localStorage.removeItem(key); }
 
 const DRAG_THRESHOLD  = 5;
+const TOUCH_DRAG_THRESHOLD = 10;   // a resting fingertip wobbles more than a mouse; less would cancel every long-press
 const SAVE_DEBOUNCE   = 1800;  // ms after last change before Drive save
 
 // ─── STATE ───────────────────────────────────────────────────────────────────
@@ -517,7 +518,11 @@ function createSkeletonLoader() {
 // Taskboards requires a Google sign-in before any board is shown — there is
 // no local/offline-only mode. Boards only ever live in the signed-in user's
 // own Drive; this app has no database of its own.
-function showAuthGate() { q('#auth-gate').classList.remove('hidden'); }
+function showAuthGate() {
+  if (dragState) cancelCardDrag();   // the gate covers the board: don't leave a half-finished drag under it
+  endTabDrag();
+  q('#auth-gate').classList.remove('hidden');
+}
 function hideAuthGate() { q('#auth-gate').classList.add('hidden'); }
 function setGateStatus(msg) { q('#gate-status').textContent = msg || ''; }
 
@@ -1040,6 +1045,7 @@ async function handleLogout() {
   }
   clearTimeout(refreshTimer);
   clearTimeout(retryTimer);
+  clearTimeout(shareRetryTimer); shareRetryDelay = 0;   // nobody is signed in to publish shares any more
   try { sessionStorage.removeItem(SS_TOKEN); } catch {}
   gAccessToken = null;
   gTokenExpiry = 0;
@@ -1857,8 +1863,11 @@ function closeColorMenu() {
   colorMenuEl = null;
   document.removeEventListener('pointerdown', onColorMenuOutside, true);
   document.removeEventListener('keydown', onColorMenuKey, true);
-  window.removeEventListener('resize', closeColorMenu);
+  window.removeEventListener('resize', onColorMenuResize);
 }
+// Width changes only (rotation, window resize) — the phone URL bar and keyboard fire height-only resizes
+let colorMenuWidth = 0;
+function onColorMenuResize() { if (innerWidth !== colorMenuWidth) closeColorMenu(); }
 function onColorMenuOutside(e) { if (colorMenuEl && !colorMenuEl.contains(e.target)) closeColorMenu(); }
 function onColorMenuKey(e) { if (e.key === 'Escape') { e.stopPropagation(); closeColorMenu(); } }
 
@@ -1905,7 +1914,8 @@ function openColorMenu(board, x, y) {
   });
   document.addEventListener('pointerdown', onColorMenuOutside, true);
   document.addEventListener('keydown', onColorMenuKey, true);
-  window.addEventListener('resize', closeColorMenu);
+  colorMenuWidth = innerWidth;
+  window.addEventListener('resize', onColorMenuResize);
 }
 
 // ─── BOARD TABS: DRAG TO REORDER ─────────────────────────────────────────────
@@ -1917,7 +1927,10 @@ let suppressTabClickUntil = 0;
 function onTabPointerDown(e, board, tabEl) {
   if (e.pointerType === 'mouse' && e.button !== 0) return;
   if (e.target.closest('button, input')) return;
-  tabDrag = { id: board.id, tabEl, startX: e.clientX, startY: e.clientY, active: false, insertIdx: null };
+  if (!e.isPrimary) return;
+  endTabDrag();   // a stale gesture never outlives a new one
+  tabDrag = { id: board.id, tabEl, startX: e.clientX, startY: e.clientY, active: false, insertIdx: null,
+              threshold: e.pointerType === 'touch' ? TOUCH_DRAG_THRESHOLD : 6 };
   if (e.pointerType === 'touch') {
     tabDrag.pressTimer = setTimeout(() => {
       if (!tabDrag || tabDrag.active) return;
@@ -1936,9 +1949,10 @@ function onTabPointerMove(e) {
   const d = tabDrag;
   if (!d) return;
   if (!d.active) {
-    if (Math.hypot(e.clientX - d.startX, e.clientY - d.startY) < 6) return;
+    if (Math.hypot(e.clientX - d.startX, e.clientY - d.startY) < d.threshold) return;
     clearTimeout(d.pressTimer);
-    if (boards.length < 2) { endTabDrag(); return; }
+    // On phones only the current board's tab is shown (‹ › move between boards), so there is nothing to reorder
+    if (boards.length < 2 || isPhoneBar()) { endTabDrag(); return; }
     d.active = true;
     const r = d.tabEl.getBoundingClientRect();
     d.grabDX = d.startX - r.left;
@@ -2094,10 +2108,18 @@ q('#add-board-menu-btn').addEventListener('click', addBoard);
 
 // Re-compute tabs on resize so they always fill available space
 let _resizeTimer;
-window.addEventListener('resize', () => { clearTimeout(_resizeTimer); _resizeTimer = setTimeout(renderTabs, 120); });
+// Only a change of width matters: on phones the URL bar sliding away and the keyboard opening
+// also fire `resize` (height only) and must not rebuild the tabs or close open menus.
+let _tabsWidth = innerWidth;
+window.addEventListener('resize', () => {
+  if (innerWidth === _tabsWidth) return;
+  _tabsWidth = innerWidth;
+  clearTimeout(_resizeTimer); _resizeTimer = setTimeout(renderTabs, 120);
+});
 
 // ─── RENDER: BOARD ────────────────────────────────────────────────────────────
 function renderBoard() {
+  if (dragState) cancelCardDrag();   // the card being dragged is about to be replaced
   const cards = currentCards();
   const zones = { todo:[], inprogress:[], archive:[], done:[] };
   const zoneCounts = { todo:0, inprogress:0, archive:0, done:0 };
@@ -2276,7 +2298,8 @@ function closeNoteTip() {
 document.addEventListener('pointerdown', e => {
   if (noteTip && !e.target.closest('.note-tip, .card__note-btn')) closeNoteTip();
 });
-addEventListener('resize', closeNoteTip);
+let _noteTipWidth = innerWidth;
+addEventListener('resize', () => { if (innerWidth !== _noteTipWidth) { _noteTipWidth = innerWidth; closeNoteTip(); } });
 document.addEventListener('scroll', closeNoteTip, true);
 
 // Double-click (desktop), long-press (touch) or right-click: the card turns red and shows ✎ edit and ✕ delete
@@ -2301,13 +2324,16 @@ function onCardContext(e) {
 function onCardDown(e) {
   if (e.target.closest('.card__actions'))  return;
   if (e.button === 2) return;   // right-click arms the card, it must not start a drag
+  if (!e.isPrimary) return;     // a second finger must not hijack the gesture in progress
+  if (dragState) cancelCardDrag();   // a stale gesture never outlives a new one
   const cardEl = e.currentTarget, id = cardEl.dataset.id;
   lastCardPointerType = e.pointerType;
   if (deleteCardId && deleteCardId !== id) { dismissDelete(); return; }
   if (deleteCardId === id) return;
   cardEl.setPointerCapture(e.pointerId);
   const sourceZone = cardEl.closest('[data-zone]')?.dataset.zone || 'todo';
-  dragState = { cardId:id, startX:e.clientX, startY:e.clientY, dragging:false, cancelled:false, sourceEl:cardEl, currentZone:null, insertBefore:null, sourceZone };
+  dragState = { cardId:id, startX:e.clientX, startY:e.clientY, dragging:false, cancelled:false, sourceEl:cardEl, currentZone:null, insertBefore:null, sourceZone,
+                threshold: e.pointerType === 'touch' ? TOUCH_DRAG_THRESHOLD : DRAG_THRESHOLD };
   if (e.pointerType === 'touch') {
     // Vertical swipes scroll the list (touch-action: pan-y); holding still arms the card
     dragState.pressTimer = setTimeout(() => {
@@ -2319,6 +2345,7 @@ function onCardDown(e) {
   cardEl.addEventListener('pointermove', onCardMove);
   cardEl.addEventListener('pointerup',   onCardUp);
   cardEl.addEventListener('pointercancel', onCardUp);
+  cardEl.addEventListener('lostpointercapture', onCardLost);
 }
 
 function onCardMove(e) {
@@ -2327,7 +2354,7 @@ function onCardMove(e) {
     const dx = e.clientX - dragState.startX;
     const dy = e.clientY - dragState.startY;
     const dist = Math.hypot(dx, dy);
-    if (dist < DRAG_THRESHOLD) return;
+    if (dist < dragState.threshold) return;
     clearTimeout(dragState.pressTimer);
 
     // Start drag in any direction
@@ -2397,23 +2424,31 @@ function startAutoScroll() {
   if (!autoScrollRaf) autoScrollRaf = requestAnimationFrame(autoScrollStep);
 }
 
+// Ends the gesture. Only a real pointerup drops the card: a pointercancel (the browser took
+// the gesture for scrolling, a system gesture, a call…) or a forced cancel leaves it where it was.
 function onCardUp(e) {
-  if (!dragState) return;
-  clearTimeout(dragState.pressTimer);
+  const d = dragState;
+  if (!d) return;
+  dragState = null;   // first, so the re-render triggered by the drop can't re-enter
+  clearTimeout(d.pressTimer);
   cancelAnimationFrame(autoScrollRaf); autoScrollRaf = 0;
   hideDropIndicator();
-  if (dragState.dragging && dragState.currentZone) {
-    moveOrReorderCard(dragState.cardId, dragState.currentZone, dragState.insertBefore || null);
-  }
-  const el = dragState.sourceEl;
+  const el = d.sourceEl;
   el.classList.remove('dragging-source');
   el.removeEventListener('pointermove', onCardMove);
   el.removeEventListener('pointerup', onCardUp);
   el.removeEventListener('pointercancel', onCardUp);
+  el.removeEventListener('lostpointercapture', onCardLost);
   hideGhost(); clearZones();
   document.body.classList.remove('dragging-active');
-  dragState = null;
+  if (d.dragging && d.currentZone && e?.type !== 'pointercancel') {
+    moveOrReorderCard(d.cardId, d.currentZone, d.insertBefore || null);
+  }
 }
+
+const cancelCardDrag = () => onCardUp({ type: 'pointercancel' });
+// The pointer was taken away mid-gesture (element re-rendered, capture stolen)
+function onCardLost() { cancelCardDrag(); }
 
 // Ghost
 function showGhost(id, x, y) {
