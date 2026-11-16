@@ -1,69 +1,67 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   TASKBOARDS — Fluent 2 Design System + Figtree typeface
-   https://fluent2.microsoft.design/ · https://fonts.google.com/specimen/Figtree
+   TASKBOARDS — app styles on the nimbleUI design system
+   https://github.com/dferreiramarques/nimbleui-design-system (tokens in nimble/tokens.css, loaded first)
    ═══════════════════════════════════════════════════════════════════════════ */
 
-/* ── Figtree from Google Fonts ── */
-@import url('https://fonts.googleapis.com/css2?family=Figtree:ital,wght@0,300..900;1,300..900&display=swap');
-
-/* ── Fluent 2 global tokens ── */
+/* ── Tokens ──
+   Colours, radii and shadows come from nimbleUI (nimble/tokens.css: themes + the rose accent, set with
+   data-accent="rose" on <html>). The --f-* names below are the ones this app's CSS already uses; they only
+   point at nimble tokens, so dark/light change colours and nothing else lives in a theme block. */
 :root {
-  /* Neutral backgrounds */
-  --f-bg1:        #ffffff;
-  --f-bg2:        #f5f5f5;
-  --f-bg3:        #ebebeb;
-  --f-bg4:        #e0e0e0;
-  /* Neutral foregrounds */
-  --f-fg1:        #242424;
-  --f-fg2:        #424242;
-  --f-fg3:        #616161;
-  --f-fg4:        #898989;
-  /* Strokes */
-  --f-stroke1:    #d1d1d1;
-  --f-stroke2:    #e0e0e0;
-  /* Brand */
-  --f-brand:      #E52B50;
-  --f-brand-h:    #D1264A;
-  --f-brand-a:    #B21F3F;
-  --f-brand-ink:  #ffffff;
-  --f-brand-bg:   rgba(229,43,80,.12);
-  --f-brand-bg2:  rgba(229,43,80,.08);
-  --f-hover:      rgba(0,0,0,.04);
-  /* Status */
-  --f-success:    #107c10;
-  --f-success-bg: rgba(16,124,16,.12);
-  --f-warning:    #ca5010;
-  --f-warning-bg: rgba(202,80,16,.12);
-  --f-danger:     #c50f1f;
-  --f-danger-bg:  rgba(197,15,31,.12);
-  /* Zone colours */
-  --f-todo:       #0078d4;
-  --f-todo-bg:    rgba(0,120,212,.08);
-  --f-inprog:     #ca5010;
-  --f-inprog-bg:  rgba(202,80,16,.08);
-  --f-done:       #107c10;
-  --f-done-bg:    rgba(16,124,16,.08);
-  --f-archive:    #808080;
-  --f-archive-bg: rgba(128,128,128,.06);
-  /* Shadows (elevation) */
-  --f-shadow-c:   rgba(0,0,0,.10);   /* colour of the header's 0 1px 2px shadow; geometry is fixed where it is used */
-  --f-shadow2:    0 1px 2px rgba(0,0,0,.06);
-  --f-shadow4:    0 1px 3px rgba(0,0,0,.08);
-  --f-shadow8:    0 4px 8px rgba(0,0,0,.14),0 0 2px rgba(0,0,0,.12);
-  --f-shadow16:   0 8px 16px rgba(0,0,0,.14),0 0 2px rgba(0,0,0,.12);
-  --f-shadow28:   0 14px 28px rgba(0,0,0,.22),0 0 8px rgba(0,0,0,.18);
-  /* Border radius */
-  --f-r2:  2px;
-  --f-r4:  4px;
-  --f-r6:  6px;
-  --f-r8:  8px;
+  /* neutral surfaces / text / strokes */
+  --f-bg1:        var(--surface);
+  --f-bg2:        var(--surface-2);
+  --f-bg3:        var(--surface-3);
+  --f-bg4:        var(--border-strong);
+  --f-fg1:        var(--text);
+  --f-fg2:        var(--text);
+  --f-fg3:        var(--muted);
+  --f-fg4:        var(--subtle);
+  --f-stroke1:    var(--border-strong);
+  --f-stroke2:    var(--border);
+  /* brand (accent) */
+  --f-brand:      var(--primary);
+  --f-brand-h:    var(--primary-h);
+  --f-brand-a:    var(--primary-h);
+  --f-brand-ink:  var(--primary-ink);
+  --f-brand-bg:   var(--primary-soft);
+  --f-brand-bg2:  var(--glow);
+  --f-hover:      color-mix(in srgb, var(--text) 4%, transparent);
+  /* status */
+  --f-success:    var(--success);
+  --f-success-bg: color-mix(in srgb, var(--success) 12%, transparent);
+  --f-warning:    var(--warn);
+  --f-warning-bg: color-mix(in srgb, var(--warn) 12%, transparent);
+  --f-danger:     var(--danger);
+  --f-danger-bg:  color-mix(in srgb, var(--danger) 12%, transparent);
+  /* zone colours */
+  --f-todo:       var(--info);
+  --f-todo-bg:    color-mix(in srgb, var(--info) 8%, transparent);
+  --f-inprog:     var(--warn);
+  --f-inprog-bg:  color-mix(in srgb, var(--warn) 8%, transparent);
+  --f-done:       var(--success);
+  --f-done-bg:    color-mix(in srgb, var(--success) 8%, transparent);
+  --f-archive:    var(--subtle);
+  --f-archive-bg: color-mix(in srgb, var(--subtle) 8%, transparent);
+  /* elevation (geometry from nimble, one value for both themes) */
+  --f-shadow-c:   var(--shadow-c);
+  --f-shadow2:    var(--sh-sm);
+  --f-shadow4:    var(--sh-sm);
+  --f-shadow8:    var(--sh-md);
+  --f-shadow16:   var(--sh-lg);
+  --f-shadow28:   var(--sh-lg);
+  /* radii */
+  --f-r2:  4px;
+  --f-r4:  var(--r-sm);
+  --f-r6:  var(--r-sm);
+  --f-r8:  var(--r-md);
   --f-rpill: 999px;
-  /* Timing */
+  /* timing */
   --f-ease:  cubic-bezier(.33,0,.67,1);
   --f-fast:  150ms;
   --f-normal: 200ms;
   --f-slow:  300ms;
-  /* Scale — identical in both themes (dark is the reference) */
+  /* Scale — identical in both themes */
   --tb-scale: 1.25;
   --tb-particle-op: 0.04;
   /* Legacy aliases (used by JS for confetti etc.) */
@@ -73,7 +71,7 @@
   --color-fg-default:       var(--f-fg1);
   --color-fg-muted:         var(--f-fg3);
   --color-fg-subtle:        var(--f-fg4);
-  --color-fg-on-emphasis:   #ffffff;
+  --color-fg-on-emphasis:   var(--primary-ink);
   --color-border-default:   var(--f-stroke1);
   --color-border-muted:     var(--f-stroke2);
   --color-accent-fg:        var(--f-brand);
@@ -88,56 +86,15 @@
   --color-danger-subtle:    var(--f-danger-bg);
   --tb-todo:         var(--f-todo);
   --tb-todo-dim:     var(--f-todo-bg);
-  --tb-todo-glow:    rgba(0,120,212,.15);
+  --tb-todo-glow:    color-mix(in srgb, var(--info) 15%, transparent);
   --tb-inprogress:   var(--f-inprog);
   --tb-inprogress-dim:  var(--f-inprog-bg);
-  --tb-inprogress-glow: rgba(202,80,16,.15);
+  --tb-inprogress-glow: color-mix(in srgb, var(--warn) 15%, transparent);
   --tb-archive:      var(--f-archive);
   --tb-archive-dim:  var(--f-archive-bg);
   --tb-done:         var(--f-done);
   --tb-done-dim:     var(--f-done-bg);
-  --tb-shadow:       rgba(0,0,0,.12);
-}
-
-/* ── Dark theme ── */
-[data-theme="dark"] {
-  --f-bg1:     #141414;
-  --f-bg2:     #1f1f1f;
-  --f-bg3:     #292929;
-  --f-bg4:     #333333;
-  --f-fg1:     #ffffff;
-  --f-fg2:     #d6d6d6;
-  --f-fg3:     #adadad;
-  --f-fg4:     #707070;
-  --f-stroke1: #404040;
-  --f-stroke2: #2e2e2e;
-  --f-brand:      #F0506E;
-  --f-brand-h:    #F46B84;
-  --f-brand-a:    #E03A5C;
-  --f-brand-bg:   rgba(240,80,110,.12);
-  --f-brand-bg2:  rgba(240,80,110,.08);
-  --f-hover:      rgba(255,255,255,.04);
-  --f-success:    #54b054;
-  --f-success-bg: rgba(84,176,84,.12);
-  --f-warning:    #ffc83d;
-  --f-warning-bg: rgba(255,200,61,.12);
-  --f-danger:     #f1707b;
-  --f-danger-bg:  rgba(241,112,123,.12);
-  --f-todo:       #479ef5;
-  --f-todo-bg:    rgba(71,158,245,.08);
-  --f-inprog:     #ffc83d;
-  --f-inprog-bg:  rgba(255,200,61,.08);
-  --f-done:       #54b054;
-  --f-done-bg:    rgba(84,176,84,.08);
-  --f-archive:    #808080;
-  --f-archive-bg: rgba(128,128,128,.06);
-  --f-shadow-c:   rgba(0,0,0,.55);
-  --f-shadow2:    0 1px 2px rgba(0,0,0,.4),0 0 2px rgba(0,0,0,.3);
-  --f-shadow4:    0 2px 4px rgba(0,0,0,.4),0 0 2px rgba(0,0,0,.3);
-  --f-shadow8:    0 4px 8px rgba(0,0,0,.4),0 0 2px rgba(0,0,0,.3);
-  --f-shadow16:   0 8px 16px rgba(0,0,0,.4),0 0 2px rgba(0,0,0,.3);
-  --f-shadow28:   0 14px 28px rgba(0,0,0,.5),0 0 8px rgba(0,0,0,.4);
-  --tb-shadow: rgba(0,0,0,.45);
+  --tb-shadow:       var(--shadow-c);
 }
 
 /* ── Reset ── */
@@ -154,7 +111,7 @@ body {
   overflow: hidden;
   background: var(--f-bg1);
   color: var(--f-fg1);
-  font-family: "Figtree", "Segoe UI Variable", "Segoe UI", system-ui, -apple-system, sans-serif;
+  font-family: var(--font);
   font-size: 14px;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;

@@ -1,0 +1,112 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   nimbleUI — tokens
+   Extracted from Roadmaps, Taskboards and Diagramico (one shared system, three accents).
+   RULE: dark/light only swap COLOUR tokens. Sizes, spacing, radii, type and shadow geometry
+   are defined once in :root. Never put a non-colour property in a [data-theme] block.
+   Accent = data-accent on <html>: emerald (default, Roadmaps) · rose (Taskboards) · indigo (Diagramico).
+   ═══════════════════════════════════════════════════════════════════════════ */
+:root {
+  /* type */
+  --font: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+
+  /* control sizes + base text (density) — sizes live here, never in a theme block */
+  --ctl-h: 36px;
+  --ctl-h-sm: 30px;
+  --ctl-h-lg: 44px;
+  --ctl-px: 14px;
+  --field-h: 40px;
+  --fs: .9375rem;
+
+  /* radii */
+  --r-sm: 6px;
+  --r-md: 8px;
+  --r-lg: 12px;
+  --r-xl: 16px;
+
+  /* motion + focus + layout */
+  --ring: 3px;
+  --ease: cubic-bezier(.2, .7, .2, 1);
+  --fast: 140ms;
+  --norm: 220ms;
+  --wrap: 1180px;
+
+  /* elevation geometry (colour comes from --shadow-c) */
+  --sh-sm: 0 1px 2px var(--shadow-c);
+  --sh-md: 0 4px 6px -1px var(--shadow-c), 0 2px 4px -2px var(--shadow-c);
+  --sh-lg: 0 20px 25px -5px var(--shadow-c), 0 8px 10px -6px var(--shadow-c);
+}
+
+/* Compact density (dense editors, e.g. Diagramico). Size only; independent of theme and accent. */
+[data-density="compact"] {
+  --ctl-h: 30px;
+  --ctl-h-sm: 24px;
+  --ctl-h-lg: 36px;
+  --ctl-px: 10px;
+  --field-h: 32px;
+  --fs: .8125rem;
+}
+
+/* ── Light (neutral zinc + emerald accent) ─────────────────────────────── */
+:root, [data-theme="light"] {
+  color-scheme: light;
+  --bg: #fafafa;
+  --surface: #ffffff;
+  --surface-2: #f4f4f5;
+  --surface-3: #e4e4e7;
+  --border: #e4e4e7;
+  --border-strong: #d4d4d8;
+  --text: #18181b;
+  --muted: #52525b;
+  --subtle: #71717a;
+
+  --primary: #10b981;
+  --primary-h: #059669;
+  --primary-fg: #059669;           /* accent used as TEXT/icon on surfaces (contrast-safe) */
+  --primary-ink: #ffffff;          /* text on a solid accent background */
+  --primary-soft: rgba(16, 185, 129, .14);
+  --glow: rgba(16, 185, 129, .10);
+
+  --shadow-c: rgba(24, 24, 27, .10);
+  --overlay: rgba(24, 24, 27, .45);
+
+  --success: #059669; --info: #0284c7; --warn: #d97706; --danger: #dc2626;
+  --secondary: #475569; --contrast: #18181b;
+  --now: #10b981; --next: #0ea5e9; --later: #8b5cf6;   /* status / column hues */
+}
+
+/* ── Dark ──────────────────────────────────────────────────────────────── */
+[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #09090b;
+  --surface: #18181b;
+  --surface-2: #1f1f23;
+  --surface-3: #27272a;
+  --border: #27272a;
+  --border-strong: #3f3f46;
+  --text: #fafafa;
+  --muted: #a1a1aa;
+  --subtle: #71717a;
+
+  --primary: #34d399;
+  --primary-h: #6ee7b7;
+  --primary-fg: #34d399;
+  --primary-ink: #052e22;
+  --primary-soft: rgba(52, 211, 153, .16);
+  --glow: rgba(52, 211, 153, .12);
+
+  --shadow-c: rgba(0, 0, 0, .55);
+  --overlay: rgba(0, 0, 0, .6);
+
+  --success: #34d399; --info: #38bdf8; --warn: #fbbf24; --danger: #f87171;
+  --secondary: #94a3b8; --contrast: #fafafa;
+  --now: #34d399; --next: #38bdf8; --later: #a78bfa;
+}
+
+/* ── Accent presets (colour only, both themes) ─────────────────────────── */
+/* Taskboards — rose */
+[data-theme="light"][data-accent="rose"] { --primary: #E52B50; --primary-h: #D1264A; --primary-fg: #D1264A; --primary-ink: #ffffff; --primary-soft: rgba(229, 43, 80, .14); --glow: rgba(229, 43, 80, .10); }
+[data-theme="dark"][data-accent="rose"]  { --primary: #F0506E; --primary-h: #F46B84; --primary-fg: #F0506E; --primary-ink: #0e0e16; --primary-soft: rgba(240, 80, 110, .16); --glow: rgba(240, 80, 110, .12); }
+/* Diagramico — indigo */
+[data-theme="light"][data-accent="indigo"] { --primary: #3347d4; --primary-h: #2a3bb0; --primary-fg: #2a3bb0; --primary-ink: #ffffff; --primary-soft: rgba(51, 71, 212, .12); --glow: rgba(51, 71, 212, .10); }
+[data-theme="dark"][data-accent="indigo"]  { --primary: #8b98ff; --primary-h: #a9b3ff; --primary-fg: #8b98ff; --primary-ink: #11131a; --primary-soft: rgba(139, 152, 255, .16); --glow: rgba(139, 152, 255, .12); }

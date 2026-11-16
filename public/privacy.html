@@ -1,12 +1,8 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-accent="rose">
 <head>
-    <script>
-        (function () {
-            var saved = localStorage.getItem('taskboards-theme') || 'dark';
-            document.documentElement.setAttribute('data-theme', saved);
-        })();
-    </script>
+    <meta name="nimble-theme-key" content="taskboards-theme" />
+  <script src="./nimble/theme.js"></script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="theme-color" content="#E52B50">
@@ -16,11 +12,9 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <title>Privacy policy — Taskboards</title>
-    <link rel="stylesheet" href="./product-page.css">
+    <link rel="stylesheet" href="./nimble/tokens.css">
+    <link rel="stylesheet" href="./nimble/components.css">
     <style>
-        /* Taskboards accent: colours only (sizes and spacing come from product-page.css). */
-        [data-theme="light"] { --primary: #E52B50; --primary-h: #D1264A; --primary-ink: #ffffff; --primary-soft: rgba(229, 43, 80, .14); --glow: rgba(229, 43, 80, .10); }
-        [data-theme="dark"] { --primary: #F0506E; --primary-h: #F46B84; --primary-ink: #0e0e16; --primary-soft: rgba(240, 80, 110, .16); --glow: rgba(240, 80, 110, .12); }
         [hidden] { display: none !important; }
         a { color: inherit; }
     </style>
@@ -35,8 +29,7 @@
                 Taskboards
             </a>
             <span class="grow"></span>
-            <button class="btn btn--text btn--icon" id="themeToggle" aria-label="Toggle light / dark theme" title="Toggle theme">
-                <svg class="ico" id="themeIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"></svg>
+            <button class="btn btn--text btn--icon" data-theme-toggle data-theme-icon aria-label="Toggle light / dark theme" title="Toggle theme">
             </button>
             <a class="btn btn--primary" href="app.html">Open the app</a>
         </div>
@@ -93,25 +86,5 @@
         </div>
     </footer>
 
-    <script>
-        (function () {
-            var moon = 'M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79Z';
-            var sun = 'M12 3v2m0 14v2m9-9h-2M5 12H3m15.36 6.36-1.41-1.41M7.05 7.05 5.64 5.64m12.72 0-1.41 1.41M7.05 16.95l-1.41 1.41';
-            var icon = document.getElementById('themeIcon');
-            var btn = document.getElementById('themeToggle');
-            function paint() {
-                var mode = document.documentElement.getAttribute('data-theme');
-                var isDark = mode === 'dark' || (mode !== 'light' && window.matchMedia('(prefers-color-scheme: dark)').matches);
-                icon.innerHTML = isDark ? '<path d="' + sun + '"/><circle cx="12" cy="12" r="4"/>' : '<path d="' + moon + '"/>';
-            }
-            btn.addEventListener('click', function () {
-                var next = (document.documentElement.getAttribute('data-theme') || 'dark') === 'dark' ? 'light' : 'dark';
-                document.documentElement.setAttribute('data-theme', next);
-                try { localStorage.setItem('taskboards-theme', next); } catch (e) {}
-                paint();
-            });
-            paint();
-        })();
-    </script>
 </body>
 </html>

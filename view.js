@@ -9,7 +9,6 @@
   const POLL_MS  = 30000;
   const fileId   = new URLSearchParams(location.search).get('b') || '';
   const SS_PASS  = 'taskboards-view-pass-' + fileId;
-  const LS_THEME = 'taskboards-theme';
 
   const q = sel => document.querySelector(sel);
   const makeId = () => Math.random().toString(36).slice(2, 10);
@@ -21,17 +20,12 @@
   let pollTimer = null;
   let busy = false;
 
-  // ── theme (same preference as the app) ─────────────────────────────────────
-  function applyTheme(theme) {
-    document.documentElement.setAttribute('data-theme', theme);
-    q('#theme-icon').textContent = theme === 'dark' ? '☽' : '☀\uFE0E';
-    try { localStorage.setItem(LS_THEME, theme); } catch {}
-  }
-  let savedTheme = 'dark';
-  try { savedTheme = localStorage.getItem(LS_THEME) || 'dark'; } catch {}
-  applyTheme(savedTheme);
+  // ── theme (same preference as the app; nimble/theme.js owns it, this only paints the icon) ──
+  const paintTheme = () => { q('#theme-icon').textContent = document.documentElement.getAttribute('data-theme') === 'dark' ? '☽' : '☀\uFE0E'; };
+  paintTheme();
+  document.addEventListener('nimble:theme', paintTheme);
   q('#theme-btn').addEventListener('click', () =>
-    applyTheme(document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark'));
+    NimbleTheme.set(document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark'));
 
   // ── gate states ────────────────────────────────────────────────────────────
   const status = msg => { q('#view-status').textContent = msg || ''; };
