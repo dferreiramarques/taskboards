@@ -3,7 +3,7 @@
    Extracted from Roadmaps, Taskboards and Diagramico (one shared system, three accents).
    RULE: dark/light only swap COLOUR tokens. Sizes, spacing, radii, type and shadow geometry
    are defined once in :root. Never put a non-colour property in a [data-theme] block.
-   Accent = data-accent on <html>: emerald (default, Roadmaps) · rose (Taskboards) · indigo (Diagramico) · amber (Veredicto).
+   Accent = data-accent on <html>: emerald (default, Roadmaps) · rose (Taskboards) · indigo (Diagramico) · amber (Veredicto) · violet (Kanbi Cards).
    ═══════════════════════════════════════════════════════════════════════════ */
 :root {
   /* type */
@@ -115,3 +115,6 @@
 /* Veredicto — amber (burnt yellow). --primary-ink is dark because the accent is light. */
 [data-theme="light"][data-accent="amber"] { --primary: #d9a21b; --primary-h: #c48d0f; --primary-fg: #8a5f00; --primary-ink: #2a1d00; --primary-soft: rgba(217, 162, 27, .16); --glow: rgba(217, 162, 27, .10); }
 [data-theme="dark"][data-accent="amber"]  { --primary: #f0bf3c; --primary-h: #f6cf63; --primary-fg: #f0bf3c; --primary-ink: #2a1d00; --primary-soft: rgba(240, 191, 60, .16); --glow: rgba(240, 191, 60, .12); }
+/* Kanbi Cards — violet. */
+[data-theme="light"][data-accent="violet"] { --primary: #6a57f0; --primary-h: #5a47e0; --primary-fg: #5a47e0; --primary-ink: #ffffff; --primary-soft: rgba(106, 87, 240, .14); --glow: rgba(106, 87, 240, .10); }
+[data-theme="dark"][data-accent="violet"]  { --primary: #8b7bf8; --primary-h: #a598fa; --primary-fg: #8b7bf8; --primary-ink: #ffffff; --primary-soft: rgba(139, 123, 248, .16); --glow: rgba(139, 123, 248, .12); }
