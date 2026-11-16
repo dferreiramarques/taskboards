@@ -7,6 +7,10 @@
              mouse/pen: drag after 5px · touch: hold 250ms then move · Esc cancels · autoscroll near edges
              keyboard (off with data-sortable-keyboard="off"; ignored if the app already handled the key): focus an item, Space/Enter grab, arrows move (←/→ also change container), Space/Enter drop, Esc cancel
              event:    nimble:sort {item, from, to, oldIndex, newIndex}   (dispatched on the target container)
+             also:     nimble:sortstart {item, from} / nimble:sortend {item, committed} (UI state while dragging)
+             options:  item [data-no-drag] = not draggable · zone/container [data-sortable-over="class"] = class toggled on the zone while hovered (default "over")
+                       any element [data-sortable-drop="#container"] = hovering it drops at the END of that container (e.g. a collapsed shelf)
+             API:      NimbleUI.sortable.cancel() aborts a drag in progress · .active() -> bool
    Edit      [data-editable][="multiline"][data-maxlength][data-allow-empty]  dblclick / Enter / F2, or [data-edit-trigger="#id"]
              Enter saves (multiline: Ctrl/Cmd+Enter) · Esc cancels · blur saves · event nimble:edit {value, oldValue} (cancelable)
    Dialog    [data-dialog-open="#id"], [data-dialog-close][data-dialog-result], overlay = .overlay[hidden] > .dialog
@@ -56,8 +60,15 @@
       if (!it.hasAttribute('aria-roledescription')) it.setAttribute('aria-roledescription', 'sortable item');
     });
   }
-  NS.sortable = { refresh: refreshSortable };
+  function overCls(c) { return c.getAttribute('data-sortable-over') || 'over'; }
+  NS.sortable = { refresh: refreshSortable, cancel: function () { if (drag) finish(false); if (kb) kbEnd(false); }, active: function () { return !!(drag && drag.started) || !!kb; } };
 
+  function rootScrolls(axis) {
+    var de = document.documentElement, key = axis === 'y' ? 'overflowY' : 'overflowX', o = getComputedStyle(de)[key];
+    if (o === 'visible') o = getComputedStyle(document.body)[key];   // body's overflow propagates to the viewport
+    if (o === 'hidden' || o === 'clip') return false;
+    return axis === 'y' ? de.scrollHeight > de.clientHeight + 1 : de.scrollWidth > de.clientWidth + 1;
+  }
   function scrollParent(n) {
     while (n && n !== document.body && n !== document.documentElement) {
       var s = getComputedStyle(n);
@@ -73,7 +84,7 @@
     var item = e.target.closest && e.target.closest(ITEM);
     if (!item) return;
     var c = item.parentElement;
-    if (!c || !c.hasAttribute('data-sortable')) return;
+    if (!c || !c.hasAttribute('data-sortable') || item.hasAttribute('data-no-drag')) return;
     var inHandle = !!e.target.closest('[data-handle]');
     var ia = e.target.closest(INTERACTIVE), blocked = ia && ia !== item && item.contains(ia);
     if (c.hasAttribute('data-sortable-handle') ? !inHandle : (!inHandle && blocked)) return;
@@ -109,6 +120,7 @@
     document.documentElement.classList.add('is-sorting');
     d.started = true;
     try { d.item.setPointerCapture && d.item.setPointerCapture(d.id); } catch (err) {}
+    emit(d.from, 'nimble:sortstart', { item: d.item, from: d.from });
     place(); loop();
   }
 
@@ -129,21 +141,28 @@
     var d = drag; if (!d || !d.started) return;
     d.ghost.style.setProperty('--x', (d.x - d.dx) + 'px');
     d.ghost.style.setProperty('--y', (d.y - d.dy) + 'px');
-    var stack = document.elementsFromPoint(d.x, d.y), c = null, i, n;
+    var stack = document.elementsFromPoint(d.x, d.y), c = null, i, n, viaDrop = false;
     for (i = 0; i < stack.length && !c; i++) {
       n = stack[i].closest && stack[i].closest('[data-sortable]');
       if (n && groupOf(n) === d.group) c = n;
     }
+    if (!c) {   // not over a list: maybe over a declared drop target (e.g. a collapsed shelf) -> end of its list
+      for (i = 0; i < stack.length && !c; i++) {
+        n = stack[i].closest && stack[i].closest('[data-sortable-drop]');
+        var t = n && document.querySelector(n.getAttribute('data-sortable-drop'));
+        if (t && t.hasAttribute('data-sortable') && groupOf(t) === d.group) { c = t; viaDrop = true; }
+      }
+    }
     if (c !== d.over) {
-      if (d.over) zoneOf(d.over).classList.remove('over');
+      if (d.over) zoneOf(d.over).classList.remove(overCls(d.over));
       d.over = c;
-      if (c) zoneOf(c).classList.add('over');
+      if (c) zoneOf(c).classList.add(overCls(c));
     }
     if (!c) { if (d.slot.parentNode) d.slot.remove(); return; }
     var ax = axisOf(c), pos = ax === 'x' ? d.x : d.y, items = itemsOf(c).filter(function (it) { return it !== d.item; }), before = null;
     for (i = 0; i < items.length; i++) {
       var r = items[i].getBoundingClientRect(), mid = ax === 'x' ? r.left + r.width / 2 : r.top + r.height / 2;
-      if (pos < mid) { before = items[i]; break; }
+      if (!viaDrop && pos < mid) { before = items[i]; break; }
     }
     d.slot.classList.toggle('drop-slot--x', ax === 'x');
     if (before) { if (d.slot.nextSibling !== before || d.slot.parentNode !== c) c.insertBefore(d.slot, before); }
@@ -164,7 +183,10 @@
       if (d.x - r.left < EDGE) sx = -speed(Math.max(0, d.x - r.left)); else if (r.right - d.x < EDGE) sx = speed(Math.max(0, r.right - d.x));
       if (sy || sx) { sp.scrollTop += sy; sp.scrollLeft += sx; moved = true; }
     }
-    if (!moved && (dx || dy)) { scrollBy(dx, dy); moved = true; }
+    if (!moved && (dx || dy)) {   // the page itself scrolls only when it can (an app whose body is overflow:hidden is a fixed layout: never scroll it)
+      var wx = dx && rootScrolls('x') ? dx : 0, wy = dy && rootScrolls('y') ? dy : 0;
+      if (wx || wy) { scrollBy(wx, wy); moved = true; }
+    }
     if (moved) place();
     d.raf = requestAnimationFrame(loop);
   }
@@ -188,7 +210,7 @@
     if (commit && to && d.slot.parentNode) to.insertBefore(d.item, d.slot);
     d.slot.remove(); d.ghost.remove();
     d.item.classList.remove('is-dragging');
-    if (d.over) zoneOf(d.over).classList.remove('over');
+    $$('[data-sortable]').forEach(function (n) { zoneOf(n).classList.remove(overCls(n)); });
     $$('.over').forEach(function (n) { n.classList.remove('over'); });
     document.documentElement.classList.remove('is-sorting');
     try { d.item.releasePointerCapture && d.item.releasePointerCapture(d.id); } catch (err) {}
@@ -200,6 +222,7 @@
         announce('Moved to position ' + (ni + 1));
       }
     }
+    emit(d.from.isConnected ? d.from : document.body, 'nimble:sortend', { item: d.item, committed: !!(commit && to) });
   }
   function onUp(e) { if (drag && e.pointerId === drag.id) finish(true); }
   function onCancel(e) { if (drag && e.pointerId === drag.id) finish(false); }
@@ -220,10 +243,11 @@
     var k = kb; if (!k) return; kb = null;
     k.item.removeAttribute('data-grabbed');
     var to = k.item.parentElement;
-    if (!commit) { k.from.insertBefore(k.item, k.fromNext && k.fromNext.parentNode === k.from ? k.fromNext : null); k.item.focus(); announce('Move cancelled'); return; }
+    if (!commit) { k.from.insertBefore(k.item, k.fromNext && k.fromNext.parentNode === k.from ? k.fromNext : null); k.item.focus(); announce('Move cancelled'); emit(k.from, 'nimble:sortend', { item: k.item, committed: false }); return; }
     var ni = itemsOf(to).indexOf(k.item);
     if (to !== k.from || ni !== k.fromIndex) emit(to, 'nimble:sort', { item: k.item, from: k.from, to: to, oldIndex: k.fromIndex, newIndex: ni });
     announce('Dropped at position ' + (ni + 1));
+    emit(to, 'nimble:sortend', { item: k.item, committed: true });
   }
   document.addEventListener('keydown', function (e) {
     if (e.defaultPrevented) return;
@@ -231,12 +255,13 @@
     if (!item || e.target !== item) return;
     var c = item.parentElement; if (!c || !c.hasAttribute('data-sortable')) return;
     if (!kb) {
-      if (c.getAttribute('data-sortable-keyboard') === 'off') return;
+      if (c.getAttribute('data-sortable-keyboard') === 'off' || item.hasAttribute('data-no-drag')) return;
       if (e.key === ' ' || e.key === 'Enter') {
         if (e.key === 'Enter' && item.hasAttribute('data-editable')) return;
         e.preventDefault();
         kb = { item: item, from: c, fromIndex: itemsOf(c).indexOf(item), fromNext: item.nextElementSibling };
         item.setAttribute('data-grabbed', 'true');
+        emit(c, 'nimble:sortstart', { item: item, from: c });
         announce('Grabbed. Use arrow keys to move, Space to drop, Escape to cancel.');
       }
       return;

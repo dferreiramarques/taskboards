@@ -50,7 +50,6 @@ function lsGet(key) {
 function lsSet(key, val) { localStorage.setItem(key, val); }
 function lsDel(key)      { localStorage.removeItem(key); }
 
-const DRAG_THRESHOLD  = 5;
 const TOUCH_DRAG_THRESHOLD = 10;   // a resting fingertip wobbles more than a mouse; less would cancel every long-press
 const SAVE_DEBOUNCE   = 1800;  // ms after last change before Drive save
 
@@ -64,9 +63,7 @@ let doneExpanded    = false;
 let selectedColumn  = 'todo';
 let selectedEffort  = '';     // '' | 'low' | 'high' — the two axes of the quick-wins matrix
 let selectedImpact  = '';
-let dragState       = null;
 let deleteCardId    = null;
-let dropIndicator   = null;   // the insertion line element
 let selectedOwners  = new Set(); // for filtering cards by owner
 
 // Auth state
@@ -496,7 +493,7 @@ function createSkeletonLoader() {
 // no local/offline-only mode. Boards only ever live in the signed-in user's
 // own Drive; this app has no database of its own.
 function showAuthGate() {
-  if (dragState) cancelCardDrag();   // the gate covers the board: don't leave a half-finished drag under it
+  NimbleUI.sortable.cancel();   // the gate covers the board: don't leave a half-finished drag under it
   endTabDrag();
   q('#auth-gate').classList.remove('hidden');
 }
@@ -1915,7 +1912,7 @@ function teamLost(board) {
 }
 
 function renderTeamBoardSoon() {
-  if (dragState || deleteCardId || !q('#modal-overlay').hidden) { setTimeout(renderTeamBoardSoon, 1200); return; }   // never pull the card out from under a gesture
+  if (NimbleUI.sortable.active() || deleteCardId || !q('#modal-overlay').hidden) { setTimeout(renderTeamBoardSoon, 1200); return; }   // never pull the card out from under a gesture
   renderTabs();
   renderOwnerFilterChips();
   renderBoard();
@@ -2828,7 +2825,7 @@ window.addEventListener('resize', () => {
 
 // ─── RENDER: BOARD ────────────────────────────────────────────────────────────
 function renderBoard() {
-  if (dragState) cancelCardDrag();   // the card being dragged is about to be replaced
+  NimbleUI.sortable.cancel();   // the card being dragged is about to be replaced
   document.body.classList.toggle('board-readonly', !canEdit());
   const cards = currentCards();
   const zones = { todo:[], inprogress:[], archive:[], done:[] };
@@ -2923,14 +2920,16 @@ function buildCardEl(card, compact) {
     `;
   }
 
+  el.setAttribute('data-sortable-item', '');   // dragged and keyboard-sorted by nimble behaviors
+  if (!canEdit() || card.id === deleteCardId) el.setAttribute('data-no-drag', '');   // viewers and the armed (red) card do not drag
   if (card.id === deleteCardId) el.classList.add('delete-mode');
   attachCardEvents(el);
   return el;
 }
 
-// ─── DRAG ────────────────────────────────────────────────────────────────────
+// ─── CARDS: events (dragging itself is nimble sortable, see the end of this section) ───────────
 function attachCardEvents(el) {
-  el.addEventListener('pointerdown', onCardDown, {passive:false});
+  el.addEventListener('pointerdown', onCardDown);
   el.addEventListener('dblclick', onCardDblClick);
   el.addEventListener('contextmenu', onCardContext);
 
@@ -3033,215 +3032,55 @@ function onCardContext(e) {
   armCard(e.currentTarget.dataset.id);
 }
 
+// Does this press start a drag? nimble behaviors (a document listener) decides after this handler: here a press can veto it
+// (armed card, another card armed, viewer) and a still long-press on touch arms the card.
 function onCardDown(e) {
   if (e.target.closest('.card__actions'))  return;
   if (e.button === 2) return;   // right-click arms the card, it must not start a drag
   if (!e.isPrimary) return;     // a second finger must not hijack the gesture in progress
-  if (!canEdit()) return;       // viewers of a team board can look, not move
-  if (dragState) cancelCardDrag();   // a stale gesture never outlives a new one
   const cardEl = e.currentTarget, id = cardEl.dataset.id;
   lastCardPointerType = e.pointerType;
-  if (deleteCardId && deleteCardId !== id) { dismissDelete(); return; }
+  const veto = () => {   // this gesture only
+    cardEl.setAttribute('data-no-drag', '');
+    const clear = () => { if (id !== deleteCardId && canEdit()) cardEl.removeAttribute('data-no-drag'); ['pointerup', 'pointercancel'].forEach(t => document.removeEventListener(t, clear, true)); };
+    ['pointerup', 'pointercancel'].forEach(t => document.addEventListener(t, clear, true));
+  };
+  if (!canEdit()) return;
+  if (deleteCardId && deleteCardId !== id) { dismissDelete(); veto(); return; }
   if (deleteCardId === id) return;
-  cardEl.setPointerCapture(e.pointerId);
-  const sourceZone = cardEl.closest('[data-zone]')?.dataset.zone || 'todo';
-  dragState = { cardId:id, startX:e.clientX, startY:e.clientY, dragging:false, cancelled:false, sourceEl:cardEl, currentZone:null, insertBefore:null, sourceZone,
-                threshold: e.pointerType === 'touch' ? TOUCH_DRAG_THRESHOLD : DRAG_THRESHOLD };
   if (e.pointerType === 'touch') {
-    // Vertical swipes scroll the list (touch-action: pan-y); holding still arms the card
-    dragState.pressTimer = setTimeout(() => {
-      if (!dragState || dragState.dragging || dragState.sourceEl !== cardEl) return;
-      onCardUp();
-      armCard(id);
-    }, LONG_PRESS_MS);
-  }
-  cardEl.addEventListener('pointermove', onCardMove);
-  cardEl.addEventListener('pointerup',   onCardUp);
-  cardEl.addEventListener('pointercancel', onCardUp);
-  cardEl.addEventListener('lostpointercapture', onCardLost);
-}
-
-function onCardMove(e) {
-  if (!dragState || dragState.cancelled) return;
-  if (!dragState.dragging) {
-    const dx = e.clientX - dragState.startX;
-    const dy = e.clientY - dragState.startY;
-    const dist = Math.hypot(dx, dy);
-    if (dist < dragState.threshold) return;
-    clearTimeout(dragState.pressTimer);
-
-    // Start drag in any direction
-    e.preventDefault();
-    dragState.dragging = true;
-    dragState.sourceEl.classList.add('dragging-source');
-    document.body.classList.add('dragging-active');
-    showGhost(dragState.cardId, e.clientX, e.clientY);
-    ensureDropIndicator();
-  }
-  if (dragState.dragging) {
-    e.preventDefault();
-    dragState.lastX = e.clientX; dragState.lastY = e.clientY;
-    moveGhost(e.clientX, e.clientY);
-    updateDropTarget();
-    startAutoScroll();
+    // dragging on touch = hold briefly, then move; holding still arms the card
+    const x = e.clientX, y = e.clientY;
+    const stop = () => { clearTimeout(timer); document.removeEventListener('pointermove', onMove, true); document.removeEventListener('pointerup', stop, true); document.removeEventListener('pointercancel', stop, true); };
+    const onMove = ev => { if (Math.hypot(ev.clientX - x, ev.clientY - y) > 6) stop(); };
+    const timer = setTimeout(() => { stop(); if (NimbleUI.sortable.active()) return; armCard(id); }, LONG_PRESS_MS);
+    document.addEventListener('pointermove', onMove, true);
+    document.addEventListener('pointerup', stop, true);
+    document.addEventListener('pointercancel', stop, true);
   }
 }
 
-// Zone, drop position and indicator for the last known pointer position
-function updateDropTarget() {
-  const { lastX: x, lastY: y } = dragState;
-  const z = detectZone(x, y);
-  const targetZone = z || dragState.sourceZone;
-  highlightZone(targetZone);
-  dragState.currentZone = targetZone;
-  if (targetZone) {
-    const { insertBefore, refEl } = detectInsertPosition(targetZone, x, y, dragState.cardId);
-    dragState.insertBefore = insertBefore;
-    showDropIndicator(targetZone, refEl);
-  } else {
-    hideDropIndicator();
-    dragState.insertBefore = null;
-  }
-}
-
-// Auto-scroll: holding a dragged card near the top/bottom edge of a list scrolls it
-// (speed grows towards the edge) until the card is dropped or moved away.
-const AUTOSCROLL_EDGE = 56, AUTOSCROLL_MAX = 14;   // px band, max px per frame
-let autoScrollRaf = 0;
-function scrollerOf(el) {
-  for (let n = el; n && n !== document.body; n = n.parentElement) {
-    const oy = getComputedStyle(n).overflowY;
-    if ((oy === 'auto' || oy === 'scroll') && n.scrollHeight > n.clientHeight) return n;
-  }
-  return null;
-}
-function autoScrollStep() {
-  autoScrollRaf = 0;
-  if (!dragState || !dragState.dragging || !dragState.currentZone) return;
-  const zoneRect = q(ZONE_EL[dragState.currentZone])?.getBoundingClientRect();
-  const sc = scrollerOf(q(ZONE_CARD_CONTAINERS[dragState.currentZone]));
-  if (!zoneRect || !sc) return;
-  const y = dragState.lastY, r = sc.getBoundingClientRect();
-  if (y < zoneRect.top || y > zoneRect.bottom) return;
-  let dy = 0;
-  if (y < r.top + AUTOSCROLL_EDGE)         dy = -AUTOSCROLL_MAX * Math.min(1, (r.top + AUTOSCROLL_EDGE - y) / AUTOSCROLL_EDGE);
-  else if (y > r.bottom - AUTOSCROLL_EDGE) dy =  AUTOSCROLL_MAX * Math.min(1, (y - (r.bottom - AUTOSCROLL_EDGE)) / AUTOSCROLL_EDGE);
-  if (!dy) return;
-  const before = sc.scrollTop;
-  sc.scrollTop += dy;
-  if (sc.scrollTop === before) return;   // already at the end
-  updateDropTarget();                     // cards moved under the pointer
-  autoScrollRaf = requestAnimationFrame(autoScrollStep);
-}
-function startAutoScroll() {
-  if (!autoScrollRaf) autoScrollRaf = requestAnimationFrame(autoScrollStep);
-}
-
-// Ends the gesture. Only a real pointerup drops the card: a pointercancel (the browser took
-// the gesture for scrolling, a system gesture, a call…) or a forced cancel leaves it where it was.
-function onCardUp(e) {
-  const d = dragState;
-  if (!d) return;
-  dragState = null;   // first, so the re-render triggered by the drop can't re-enter
-  clearTimeout(d.pressTimer);
-  cancelAnimationFrame(autoScrollRaf); autoScrollRaf = 0;
-  hideDropIndicator();
-  const el = d.sourceEl;
-  el.classList.remove('dragging-source');
-  el.removeEventListener('pointermove', onCardMove);
-  el.removeEventListener('pointerup', onCardUp);
-  el.removeEventListener('pointercancel', onCardUp);
-  el.removeEventListener('lostpointercapture', onCardLost);
-  hideGhost(); clearZones();
-  document.body.classList.remove('dragging-active');
-  if (d.dragging && d.currentZone && e?.type !== 'pointercancel') {
-    moveOrReorderCard(d.cardId, d.currentZone, d.insertBefore || null);
-  }
-}
-
-const cancelCardDrag = () => onCardUp({ type: 'pointercancel' });
-// The pointer was taken away mid-gesture (element re-rendered, capture stolen)
-function onCardLost() { cancelCardDrag(); }
-
-// Ghost
-function showGhost(id, x, y) {
-  const card = currentCards().find(c=>c.id===id);
-  if (!card) return;
-  const g = q('#drag-ghost');
-  g.innerHTML = `<div class="drag-ghost__title">${esc(card.title)}</div>${card.owner?`<div class="drag-ghost__owner">${esc(card.owner)}</div>`:''}`;
-  g.style.left=(x-75)+'px'; g.style.top=(y-28)+'px'; g.classList.add('visible');
-}
-function moveGhost(x,y) { const g=q('#drag-ghost'); g.style.left=(x-75)+'px'; g.style.top=(y-28)+'px'; }
-function hideGhost()     { q('#drag-ghost').classList.remove('visible'); }
-
-// Zones
-const ZONES   = ['archive','todo','inprogress','done'];
-const ZONE_EL = { archive:'#archive-bar', todo:'#todo-column', inprogress:'#inprogress-column', done:'#done-bar' };
-function detectZone(x,y) {
-  for (const z of ZONES) { const r=q(ZONE_EL[z])?.getBoundingClientRect(); if(r&&x>=r.left&&x<=r.right&&y>=r.top&&y<=r.bottom) return z; } return null;
-}
-function highlightZone(zone) { clearZones(); if(zone) q(ZONE_EL[zone])?.classList.add('drag-over'); }
-function clearZones() { ZONES.forEach(z=>q(ZONE_EL[z])?.classList.remove('drag-over')); }
-
-// Detect which card the pointer is above within a zone (for reordering)
-const ZONE_CARD_CONTAINERS = { archive:'#archive-cards', todo:'#todo-cards', inprogress:'#inprogress-cards', done:'#done-cards' };
-function detectInsertPosition(zone, x, y, draggedId) {
-  const sel = ZONE_CARD_CONTAINERS[zone];
-  if (!sel) return { insertBefore: null, refEl: null };
-  const container = q(sel);
-  if (!container) return { insertBefore: null, refEl: null };
-  const cards = Array.from(container.querySelectorAll('.card:not(.dragging-source)'));
-  for (const card of cards) {
-    const r = card.getBoundingClientRect();
-    const midY = r.top + r.height / 2;
-    if (y < midY) return { insertBefore: card.dataset.id, refEl: card };
-  }
-  return { insertBefore: null, refEl: null }; // insert at end
-}
-
-// Drop indicator line — always lives in document.body with position:fixed
-// so it NEVER shifts card layout (which would break mobile drag detection)
-function ensureDropIndicator() {
-  if (dropIndicator) return;
-  dropIndicator = document.createElement('div');
-  dropIndicator.className = 'drop-indicator';
-  dropIndicator.style.cssText = 'position:fixed;display:none;height:3px;border-radius:2px;background:var(--accent,#ffa300);pointer-events:none;z-index:9999;transition:top .08s ease;box-shadow:0 0 6px var(--accent,#ffa300);';
-  document.body.appendChild(dropIndicator);
-}
-
-function showDropIndicator(zone, refEl) {
-  if (!dropIndicator) return;
-  const containerEl = q(ZONE_CARD_CONTAINERS[zone]);
-  if (!containerEl) { hideDropIndicator(); return; }
-
-  const cr = containerEl.getBoundingClientRect();
-  let indicatorY;
-
-  if (refEl) {
-    indicatorY = refEl.getBoundingClientRect().top - 2;
-  } else {
-    const lastCard = [...containerEl.querySelectorAll('.card:not(.dragging-source)')].pop();
-    indicatorY = lastCard ? lastCard.getBoundingClientRect().bottom + 2 : cr.top + 4;
-  }
-
-  dropIndicator.style.left    = (cr.left + 6) + 'px';
-  dropIndicator.style.width   = (cr.width - 12) + 'px';
-  dropIndicator.style.top     = indicatorY + 'px';
-  dropIndicator.style.display = 'block';
-}
-
-function hideDropIndicator() {
-  if (dropIndicator) dropIndicator.style.display = 'none';
-}
+// A card was dropped in a list (mouse, touch or keyboard): the kit already moved the element, now the data follows.
+const CARD_LISTS = { 'archive-cards': 'archive', 'todo-cards': 'todo', 'inprogress-cards': 'inprogress', 'done-cards': 'done' };
+document.addEventListener('nimble:sort', e => {
+  const { item, to } = e.detail;
+  const status = CARD_LISTS[to.id];
+  if (!status || !item.classList.contains('card')) return;
+  let next = item.nextElementSibling;
+  while (next && !next.classList.contains('card')) next = next.nextElementSibling;
+  moveOrReorderCard(item.dataset.id, status, next ? next.dataset.id : null);
+});
 
 function activateDelete(id) { 
   deleteCardId=id; 
-  document.querySelector(`.card[data-id="${id}"]`)?.classList.add('delete-mode'); 
+  const armed = document.querySelector(`.card[data-id="${id}"]`);
+  armed?.classList.add('delete-mode'); armed?.setAttribute('data-no-drag', ''); 
 }
 
 function dismissDelete() { 
   if(!deleteCardId)return; 
-  document.querySelector(`.card[data-id="${deleteCardId}"]`)?.classList.remove('delete-mode'); 
+  const was = document.querySelector(`.card[data-id="${deleteCardId}"]`);
+  was?.classList.remove('delete-mode'); if (canEdit()) was?.removeAttribute('data-no-drag'); 
   deleteCardId=null; 
 }
 

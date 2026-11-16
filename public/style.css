@@ -635,8 +635,8 @@ body.tab-dragging, body.tab-dragging * { cursor: grabbing !important; }
 }
 .shelf--archive .drop-overlay { background: color-mix(in srgb, var(--f-archive) 8%, transparent); color: var(--f-archive); border: 2px dashed var(--f-archive); }
 .shelf--done    .drop-overlay { background: color-mix(in srgb, var(--f-done) 8%, transparent); color: var(--f-done); border: 2px dashed var(--f-done); }
-body.dragging-active .shelf--archive .drop-overlay,
-body.dragging-active .shelf--done    .drop-overlay { display: flex; }
+html.is-sorting .shelf--archive .drop-overlay,
+html.is-sorting .shelf--done    .drop-overlay { display: flex; }
 
 /* ══════════════════════════════════════════════════════
    MAIN BOARD
@@ -742,7 +742,6 @@ body.dragging-active .shelf--done    .drop-overlay { display: flex; }
   padding: 10px 12px;
   cursor: grab;
   position: relative;
-  touch-action: pan-y;
   -webkit-touch-callout: none;
   user-select: none;
   transition: transform var(--f-normal) var(--f-ease), box-shadow var(--f-normal) var(--f-ease), border-color var(--f-normal) var(--f-ease);
@@ -920,7 +919,6 @@ body.dragging-active .shelf--done    .drop-overlay { display: flex; }
   display: flex;
   align-items: center;
   gap: 10px;
-  touch-action: pan-y;
   -webkit-touch-callout: none;
   user-select: none;
   box-shadow: none;
@@ -950,25 +948,9 @@ body.dragging-active .shelf--done    .drop-overlay { display: flex; }
 }
 
 /* ── Drag ── */
-.drag-ghost {
-  position: fixed;
-  pointer-events: none;
-  z-index: 9999;
-  opacity: 0;
-  transition: opacity .1s;
-  background: var(--f-bg1);
-  border: 1px solid var(--f-brand);
-  border-radius: var(--f-r4);
-  padding: 10px 14px;
-  min-width: 150px; max-width: 250px;
-  box-shadow: var(--f-shadow28);
-}
-.drag-ghost.visible { opacity: .96; }
-.drag-ghost__title { font-size: .8125rem; font-weight: 500; color: var(--f-fg1); margin-bottom: 3px; }
-.drag-ghost__owner { font-size: .6875rem; color: var(--f-brand); }
-body.dragging-active { cursor: grabbing !important; }
-body.dragging-active .card:not(.dragging-source) { pointer-events: none; }
-.card.dragging-source { opacity: .25; transform: scale(.98); }
+/* dragging is nimble sortable: .drag-ghost (a clone of the card), .drop-slot and html.is-sorting come from the kit */
+html.is-sorting .card:not(.is-dragging) { pointer-events: none; }
+.card.is-dragging { opacity: .25; transform: scale(.98); }
 .card.drag-ready { transform: scale(1.02); box-shadow: var(--f-shadow8); z-index: 10; }
 
 /* ══════════════════════════════════════════════════════
@@ -1520,7 +1502,7 @@ body.matrix-view .matrix-btn, body.matrix-view.done-expanded .matrix-btn { botto
 
   /* smaller interface text; the cards keep their desktop size (rem is relative to --tb-scale) */
   :root { --tb-scale: 1.1; --tb-card-k: calc(1.25 / 1.1); }
-  .card__title, .card__title-input, .drag-ghost__title { font-size: calc(.8125rem * var(--tb-card-k)); }
-  .card__owner, .card__date, .card__owner-compact, .drag-ghost__owner { font-size: calc(.6875rem * var(--tb-card-k)); }
+  .card__title, .card__title-input { font-size: calc(.8125rem * var(--tb-card-k)); }
+  .card__owner, .card__date, .card__owner-compact { font-size: calc(.6875rem * var(--tb-card-k)); }
   .card__title-compact { font-size: calc(.75rem * var(--tb-card-k)); }
 }
