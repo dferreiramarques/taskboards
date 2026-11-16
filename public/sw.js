@@ -1,5 +1,5 @@
-const CACHE_NAME = 'taskboards-v58';
-const ASSETS = ['/', './index.html', './app.html', './style.css', './nimble/tokens.css', './nimble/components.css', './nimble/components.layered.css', './nimble/behaviors.js', './nimble/theme.js', './favicon.svg', './app.js', './manifest.json', './config.js', './share-core.js', './view.html', './view.js', './view.css', './privacy.html', './terms.html'];
+const CACHE_NAME = 'taskboards-v59';
+const ASSETS = ['/', './index.html', './app.html', './style.css', './reset.css', './nimble/tokens.css', './nimble/components.css', './nimble/components.layered.css', './nimble/behaviors.js', './nimble/theme.js', './favicon.svg', './app.js', './manifest.json', './config.js', './share-core.js', './view.html', './view.js', './view.css', './privacy.html', './terms.html'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(ASSETS)));

@@ -1,0 +1,3 @@
+/* Legacy reset, kept in a layer BEFORE nimble so the kit components (toast, dialog, menu…) keep their own padding/margins. */
+@layer reset, nimble;
+@layer reset { *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; } }
