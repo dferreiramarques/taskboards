@@ -156,6 +156,22 @@ body.has-dialog { overflow: hidden; }
 [data-tip]::after { content: attr(data-tip); position: absolute; bottom: calc(100% + 6px); left: 50%; transform: translateX(-50%); z-index: 60; padding: 4px 8px; border-radius: var(--r-sm); background: var(--text); color: var(--bg); font-size: .75rem; font-weight: 500; line-height: 1.4; white-space: nowrap; opacity: 0; pointer-events: none; transition: opacity var(--fast); }
 [data-tip]:hover::after, [data-tip]:focus-visible::after { opacity: 1; }
 
+/* ── Colour tabs (.rtabs/.rtab) — one tab per item, each with its own colour via --tab-color ── */
+.rtabs { display: flex; align-items: center; gap: 6px; max-width: 100%; overflow-x: auto; scrollbar-width: none; padding: 2px; }
+.rtabs::-webkit-scrollbar { display: none; }
+.rtab {
+  --tab-color: var(--primary);
+  display: inline-flex; align-items: center; gap: 6px; flex: none;
+  height: 32px; padding: 0 12px;
+  border: 1px solid var(--border); border-radius: var(--r-md);
+  background: var(--surface-2); color: var(--muted);
+  font-size: .8125rem; font-weight: 500; white-space: nowrap; user-select: none;
+  transition: background var(--fast), color var(--fast), border-color var(--fast), box-shadow var(--fast);
+}
+.rtab:hover { color: var(--text); background: var(--surface-3); }
+.rtab[aria-pressed="true"] { background: color-mix(in srgb, var(--tab-color) 12%, var(--surface)); border-color: var(--tab-color); color: var(--tab-color); font-weight: 600; box-shadow: var(--sh-sm); }
+.rtab--add { width: 32px; padding: 0; justify-content: center; border-style: dashed; background: transparent; }
+
 /* nimbleUI · overlays — .overlay/.dialog, .toasts/.toast, .menu. Pairs with behaviors.js (dialog, confirm, toast, menu).
    Needs tokens.css. Generated into components.css by tools/build-css.mjs (edit this file, then run the script). */
 /* ── Dialog ──────────────────────────────────────────────────────────────── */
@@ -191,6 +207,27 @@ body.has-dialog { overflow: hidden; }
 .menu__item--danger { color: var(--danger); }
 .menu__item[disabled] { opacity: .5; cursor: not-allowed; }
 .menu__sep { height: 1px; background: var(--border); margin: 6px 0; }
+
+/* ── Drawer (.drawer + .doclist/.docitem) — side panel with a document list, e.g. an editor's file drawer ── */
+.drawer { position: fixed; top: 0; left: 0; bottom: 0; width: min(340px, 100vw); z-index: 90; display: flex; flex-direction: column; padding-top: env(safe-area-inset-top, 0px); background: var(--surface); border-right: 1px solid var(--border); box-shadow: var(--sh-lg); }
+.drawer__head { display: flex; align-items: center; gap: 8px; padding: 14px 14px 10px; }
+.drawer__title { flex: 1; min-width: 0; font-size: .9375rem; font-weight: 600; }
+.drawer__foot { display: flex; flex-wrap: wrap; gap: 6px; padding: 12px 14px calc(12px + env(safe-area-inset-bottom, 0px)); border-top: 1px solid var(--border); }
+.drawer__foot > .btn { flex: 1 1 100%; justify-content: flex-start; }
+.doclist { flex: 1; min-height: 0; overflow: auto; padding: 4px 8px; display: flex; flex-direction: column; gap: 2px; }
+.docitem { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 8px; align-items: center; padding: 8px 10px; border-radius: var(--r-md); cursor: pointer; }
+.docitem:hover { background: var(--surface-2); }
+.docitem[aria-current="true"] { background: var(--primary-soft); }
+.docitem__name { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.docitem__meta { grid-column: 1; font: .6875rem var(--mono); color: var(--muted); }
+.docitem__acts { grid-row: 1 / 3; grid-column: 2; display: flex; gap: 2px; opacity: 0; }
+.docitem:hover .docitem__acts, .docitem:focus-within .docitem__acts, .docitem[aria-current="true"] .docitem__acts { opacity: 1; }
+
+/* ── Context bar (.ctxbar) — small floating toolbar anchored to a selection; the app sets left/top ── */
+.ctxbar { position: fixed; z-index: 60; display: flex; align-items: center; gap: 2px; padding: 3px; max-width: calc(100vw - 20px); overflow-x: auto; scrollbar-width: none; background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); box-shadow: var(--sh-md); }
+.ctxbar > * { flex: none; }
+.ctxbar .btn { height: var(--ctl-h-sm); min-width: var(--ctl-h-sm); }
+.ctxbar__sep { width: 1px; align-self: stretch; margin: 4px 2px; background: var(--border); }
 
 /* nimbleUI · board — .cols/.col/.card, .empty, sortable support (.drop-slot, .drag-ghost, .is-dragging), .list/.listrow. Pairs with behaviors.js (sort).
    Needs tokens.css. Generated into components.css by tools/build-css.mjs (edit this file, then run the script). */
