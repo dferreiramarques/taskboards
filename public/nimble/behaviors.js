@@ -17,6 +17,8 @@
              (or your own classes: overlay[data-dialog-overlay][hidden] > [data-dialog-panel])
              focus trap, Esc / backdrop close ([data-static] disables), focus returns to opener; events nimble:dialogopen/-close
    Confirm   NimbleUI.confirm({title, message, confirmLabel, cancelLabel, danger}) -> Promise<boolean>
+   Install   [data-install] (button, hidden until the browser says the app can be installed; shows a download-arrow icon, no text (in a menu row put <span class="install-ico"></span> next to the label); click = install prompt;
+             hidden once installed or when already running as an installed app; needs a web app manifest; iOS has no install prompt, so it stays hidden there)
    Menu      [data-menu-toggle="#id"] + .menu[hidden] > [role=menuitem]; arrows/Home/End/Esc; event nimble:menuselect {item, value}
    Tabs      [data-tabs] > [role=tablist] > [role=tab][aria-controls]; panels [role=tabpanel]; event nimble:tab {tab, panel}
    Toast     NimbleUI.toast(text, {tone:'warn', duration:3200})                                                              */
@@ -493,8 +495,31 @@
     return entry;
   };
 
+  /* ═════════════ install (PWA) ═════════════ */
+  var installEvt = null, INSTALL_ICON = '<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="M7 11l5 5 5-5"/><path d="M5 21h14"/></svg>';
+  function standalone() { return (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || window.navigator.standalone === true; }
+  function refreshInstall() {
+    var bs = document.querySelectorAll('[data-install]'), show = !!installEvt && !standalone();
+    for (var i = 0; i < bs.length; i++) {
+      var b = bs[i];
+      var ic = b.querySelector('.install-ico') || (b.firstElementChild ? null : b); if (ic && !ic.firstElementChild) ic.innerHTML = INSTALL_ICON;
+      if (!b.hasAttribute('aria-label')) b.setAttribute('aria-label', 'Install app');
+      if (!b.hasAttribute('title')) b.setAttribute('title', 'Install app');
+      b.hidden = !show;
+    }
+  }
+  window.addEventListener('beforeinstallprompt', function (e) { e.preventDefault(); installEvt = e; refreshInstall(); });
+  window.addEventListener('appinstalled', function () { installEvt = null; refreshInstall(); document.dispatchEvent(new CustomEvent('nimble:install', { detail: { outcome: 'installed' } })); });
+  document.addEventListener('click', function (e) {
+    var b = e.target.closest && e.target.closest('[data-install]');
+    if (!b || !installEvt) return;
+    var ev = installEvt; installEvt = null; refreshInstall();
+    ev.prompt();
+    if (ev.userChoice) ev.userChoice.then(function (c) { document.dispatchEvent(new CustomEvent('nimble:install', { detail: { outcome: c && c.outcome } })); });
+  });
+
   /* ═════════════ boot ═════════════ */
-  function init(root) { refreshSortable(root); refreshEditable(root); initTabs(root); }
+  function init(root) { refreshSortable(root); refreshEditable(root); initTabs(root); refreshInstall(); }
   NS.init = init;
   function boot() {
     init();
