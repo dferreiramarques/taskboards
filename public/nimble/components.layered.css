@@ -4,3 +4,7 @@
    Remove it in favour of components.css once the app's own components are renamed or replaced. */
 @layer nimble;
 @import url("components.css") layer(nimble);
+/* The toast is created by NimbleUI.toast(), not by the app, so the kit owns its geometry: it is declared outside the layer
+   (and one class more specific) so an app's reset or its own .toast rules can never shrink it. Colours still come from the layer. */
+.toasts .toast { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-width: 1px; border-style: solid; border-radius: var(--r-md); font-size: .875rem; line-height: 1.45; font-weight: 400; }
+.toasts .toast__icon { display: inline-flex; flex: none; }
