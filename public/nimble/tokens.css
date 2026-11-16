@@ -100,7 +100,7 @@
   --shadow-c: rgba(0, 0, 0, .55);
   --overlay: rgba(0, 0, 0, .6);
 
-  --success: #34d399; --info: #38bdf8; --warn: #fbbf24; --danger: #f87171;
+  --success: #34d399; --info: #38bdf8; --warn: #fbbf24; --danger: #dc2626;
   --secondary: #94a3b8; --contrast: #fafafa;
   --now: #34d399; --next: #38bdf8; --later: #a78bfa;
 }
