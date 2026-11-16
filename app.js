@@ -90,43 +90,9 @@ const getDateCls = ds => {
   return diff < 0 ? 'overdue' : diff <= 3 ? 'soon' : '';
 };
 
-// ─── TOAST NOTIFICATIONS ─────────────────────────────────────────────────────
+// ─── TOAST NOTIFICATIONS (nimbleUI: same message on screen → (×n); types success | error | info | loading) ───
 const TOAST_DURATION = 2500;
-const activeToasts = new Map(); // message → { toast, count, timer }
-function showToast(message, type = 'success') {
-  const container = q('#toast-container');
-  const key = `${type}|${message}`;
-
-  const dismiss = toast => {
-    activeToasts.delete(key);
-    toast.classList.remove('toast--visible');
-    // transitionend never fires while the tab is hidden/asleep, so back it with a timeout
-    toast.addEventListener('transitionend', () => toast.remove(), { once: true });
-    setTimeout(() => toast.remove(), 400);
-  };
-
-  // Same message already on screen: bump a counter and restart its timer instead of stacking
-  const existing = activeToasts.get(key);
-  if (existing) {
-    existing.count++;
-    existing.toast.querySelector('.toast__message').textContent = `${message} (×${existing.count})`;
-    clearTimeout(existing.timer);
-    existing.timer = setTimeout(() => dismiss(existing.toast), TOAST_DURATION);
-    return;
-  }
-
-  const toast = document.createElement('div');
-  toast.className = `toast toast--${type}`;
-
-  const icons = { success: '✓', error: '✕', info: '◈', loading: '◐' };
-  toast.innerHTML = `<span class="toast__icon">${icons[type] || icons.success}</span><span class="toast__message">${esc(message)}</span>`;
-
-  container.appendChild(toast);
-  requestAnimationFrame(() => toast.classList.add('toast--visible'));
-
-  const entry = { toast, count: 1, timer: setTimeout(() => dismiss(toast), TOAST_DURATION) };
-  activeToasts.set(key, entry);
-}
+function showToast(message, type = 'success') { NimbleUI.toast(message, { tone: type, duration: TOAST_DURATION }); }
 
 // ─── BOARD HELPERS ────────────────────────────────────────────────────────────
 function currentBoard() { return boards.find(b => b.id === currentBoardId) || boards[0]; }
@@ -1026,18 +992,9 @@ function showUserPill() {
   q('#user-email-menu').textContent = gUser.email || '';
 }
 
-function openUserMenu()  { q('#user-pill').classList.add('open'); }
-function closeUserMenu() { q('#user-pill').classList.remove('open'); }
-function toggleUserMenu(e) {
-  e.stopPropagation();
+// The account menu is a nimble menu: #user-pill-btn[data-menu-toggle] opens #user-menu (arrows, Esc, outside click and item select close it).
+q('#user-pill-btn').addEventListener('click', () => {
   q('#install-menu-btn').hidden = q('#install-btn').style.display === 'none';   // only offer install when the browser can
-  q('#user-pill').classList.toggle('open');
-}
-
-// Click on pill to open menu; click outside to close
-q('#user-pill').addEventListener('click', toggleUserMenu);
-document.addEventListener('click', e => {
-  if (!e.target.closest('#user-pill')) closeUserMenu();
 });
 
 async function handleLogout() {
@@ -1077,7 +1034,6 @@ async function handleLogout() {
   q('#done-bar').classList.remove('expanded');
   tabPage = 0;
 
-  closeUserMenu();
   q('#user-pill').classList.add('hidden');
   setSyncStatus('', 'Offline');
   renderGate();
@@ -1751,15 +1707,13 @@ function openShareModal(boardId) {
   shareModalBoardId = boardId;
   teamMembers = null;
   renderShareModal();
-  q('#share-overlay').classList.remove('hidden');
+  NimbleUI.dialog.open(q('#share-overlay'));
   const b = shareBoard();
   if (TEAMS_ENABLED && b?.team?.role === 'owner') teamLoadMembers(b);
 }
-function closeShareModal() {
-  q('#share-overlay').classList.add('hidden');
-  shareModalBoardId = null;
-  inviteOpen = false;
-}
+function closeShareModal() { NimbleUI.dialog.close(q('#share-overlay')); }
+// also fires on Esc, backdrop and the ✕ button (data-dialog-close)
+q('#share-overlay').addEventListener('nimble:dialogclose', () => { shareModalBoardId = null; inviteOpen = false; });
 
 // state: { busy: 'text' } | { needScope: true } | { error: 'text' }
 function publicShareHtml(board, state) {
@@ -1868,9 +1822,6 @@ q('#share-body').addEventListener('click', e => {
   const btn = e.target.closest('[data-act]');
   if (btn) onShareAction(btn.dataset.act, btn.dataset.target, btn);
 });
-q('#share-close').addEventListener('click', closeShareModal);
-q('#share-overlay').addEventListener('click', e => { if (e.target === q('#share-overlay')) closeShareModal(); });
-document.addEventListener('keydown', e => { if (e.key === 'Escape' && (shareModalBoardId || inviteOpen)) closeShareModal(); });
 
 // ─── TEAM BOARDS ──────────────────────────────────────────────────────────────
 // A team board is ONE Drive file, created by the owner's Taskboards and shared with the people they
@@ -1964,7 +1915,7 @@ function teamLost(board) {
 }
 
 function renderTeamBoardSoon() {
-  if (dragState || deleteCardId || !q('#modal-overlay').classList.contains('hidden')) { setTimeout(renderTeamBoardSoon, 1200); return; }   // never pull the card out from under a gesture
+  if (dragState || deleteCardId || !q('#modal-overlay').hidden) { setTimeout(renderTeamBoardSoon, 1200); return; }   // never pull the card out from under a gesture
   renderTabs();
   renderOwnerFilterChips();
   renderBoard();
@@ -2234,7 +2185,7 @@ function renderInviteModal(state = {}) {
   inviteOpen = true;
   shareModalBoardId = null;
   q('#share-title').innerHTML = `${ICON_TEAM} TEAM INVITATION`;
-  q('#share-overlay').classList.remove('hidden');
+  NimbleUI.dialog.open(q('#share-overlay'));
   const body = q('#share-body');
   if (state.busy) { body.innerHTML = `<p class="share__text">${esc(state.busy)}</p>`; return; }
   body.innerHTML = `
@@ -3407,7 +3358,6 @@ q('#matrix').addEventListener('click', e => {
 
 // ─── CARD MODAL ───────────────────────────────────────────────────────────────
 q('#fab').addEventListener('click', () => openModal());
-q('#modal-close').addEventListener('click', closeModal);
 // Clicking outside the card modal doesn't close it — only ✕ (or Esc) and Save/Create do
 q('#modal').querySelectorAll('.modal__toggle-btn').forEach(btn=>{
   btn.addEventListener('click', ()=>{
@@ -3453,7 +3403,7 @@ function openModal() {
   editingCardId = null;
   setModalMode(false);
   q('#modal-col-field').hidden = false;
-  q('#modal-overlay').classList.remove('hidden');
+  NimbleUI.dialog.open(q('#modal-overlay'));
   q('#input-title').value=''; q('#input-owner').value=''; q('#input-date').value='';
   setNoteField('');
   selectedColumn='todo';
@@ -3472,7 +3422,7 @@ function openEditModal(id) {
   dismissDelete();
   editingCardId = id;
   setModalMode(true);
-  q('#modal-overlay').classList.remove('hidden');
+  NimbleUI.dialog.open(q('#modal-overlay'));
   q('#input-title').value = card.title;
   q('#input-owner').value = card.owner || '';
   q('#input-date').value  = card.dueDate || '';
@@ -3499,7 +3449,8 @@ function showNoteField(show) {
   q('#note-toggle-label').textContent = show ? 'NOTE' : 'ADD NOTE';
 }
 
-function closeModal() { q('#modal-overlay').classList.add('hidden'); editingCardId = null; }
+function closeModal() { NimbleUI.dialog.close(q('#modal-overlay')); }
+q('#modal-overlay').addEventListener('nimble:dialogclose', () => { editingCardId = null; });   // also Esc, backdrop and ✕
 
 function updateCard(id, { title, owner, dueDate, note, status, effort = '', impact = '' }) {
   if (!requireEdit()) return;
@@ -3534,11 +3485,9 @@ function submitCard() {
 function shakeEl(el) { el.style.animation='none'; requestAnimationFrame(()=>{ el.style.animation='delete-shake .35s ease'; }); }
 
 // ─── HELP MODAL ───────────────────────────────────────────────────────────────
-q('#help-btn').addEventListener('click',  ()=>q('#help-overlay').classList.remove('hidden'));
-q('#help-menu-btn').addEventListener('click', ()=>q('#help-overlay').classList.remove('hidden'));
+q('#help-btn').addEventListener('click',  ()=>NimbleUI.dialog.open(q('#help-overlay')));
+q('#help-menu-btn').addEventListener('click', ()=>NimbleUI.dialog.open(q('#help-overlay')));
 q('#install-menu-btn').addEventListener('click', ()=>q('#install-btn').click());
-q('#help-close').addEventListener('click',()=>q('#help-overlay').classList.add('hidden'));
-q('#help-overlay').addEventListener('click', e=>{ if(e.target===q('#help-overlay')) q('#help-overlay').classList.add('hidden'); });
 
 // ─── THEME ────────────────────────────────────────────────────────────────────
 function initTheme() { paintTheme(document.documentElement.getAttribute('data-theme')); }
@@ -3615,8 +3564,7 @@ setInterval(spawnParticle, 3000);
 document.addEventListener('keydown', e=>{
   if (e.key==='Escape') {
     if (noteTip) { closeNoteTip(); return; }
-    if (!q('#modal-overlay').classList.contains('hidden'))  { closeModal(); return; }
-    if (!q('#help-overlay').classList.contains('hidden'))   { q('#help-overlay').classList.add('hidden'); return; }
+    // dialogs close themselves (nimble behaviors: Esc, backdrop, focus trap)
     dismissDelete();
   }
   if ((e.ctrlKey||e.metaKey) && e.key==='Enter') openModal();

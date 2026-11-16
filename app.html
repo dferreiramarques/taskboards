@@ -15,6 +15,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="./nimble/tokens.css" />
+  <link rel="stylesheet" href="./nimble/components.layered.css" />
   <link rel="stylesheet" href="./style.css" />
   <script src="./config.js"></script>
   <!-- Force SW update if stale -->
@@ -55,7 +56,6 @@
 
   <div id="particles" class="particles" aria-hidden="true"></div>
   <div id="confetti-layer" class="confetti-layer" aria-hidden="true"></div>
-  <div id="toast-container" class="toast-container" aria-live="polite"></div>
 
   <!-- ── TOP BAR: brand · board tabs · sync · theme · account ── -->
   <header class="topbar">
@@ -86,26 +86,28 @@
       <!-- Google SSO — signed in always, gate below handles sign-in -->
       <div class="topbar__login" id="login-area">
         <div class="user-pill hidden" id="user-pill">
+          <button type="button" class="user-pill__btn" id="user-pill-btn" data-menu-toggle="#user-menu" aria-haspopup="menu" aria-expanded="false">
           <img class="user-pill__avatar" id="user-avatar" src="" alt="" referrerpolicy="no-referrer" />
           <span class="user-pill__name" id="user-name"></span>
           <svg class="user-pill__burger ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
-          <div class="user-pill__menu" id="user-menu">
+          </button>
+          <div class="menu menu--end user-pill__menu" id="user-menu" role="menu" hidden>
             <div class="user-pill__menu-email" id="user-email-menu"></div>
             <div class="user-pill__menu-divider user-pill__menu-mobile"></div>
-            <button class="user-pill__menu-item user-pill__menu-item--neutral user-pill__menu-mobile" id="add-board-menu-btn">New board</button>
-            <button class="user-pill__menu-item user-pill__menu-item--neutral user-pill__menu-mobile" id="help-menu-btn">How it works</button>
-            <button class="user-pill__menu-item user-pill__menu-item--neutral user-pill__menu-mobile" id="install-menu-btn" hidden>Install app</button>
-            <a class="user-pill__menu-item user-pill__menu-item--neutral user-pill__menu-mobile" href="./index.html">About Taskboards</a>
-            <button class="user-pill__menu-item user-pill__menu-item--neutral user-pill__menu-mobile" id="theme-menu-btn">
+            <button role="menuitem" class="user-pill__menu-item user-pill__menu-item--neutral user-pill__menu-mobile" id="add-board-menu-btn">New board</button>
+            <button role="menuitem" class="user-pill__menu-item user-pill__menu-item--neutral user-pill__menu-mobile" id="help-menu-btn">How it works</button>
+            <button role="menuitem" class="user-pill__menu-item user-pill__menu-item--neutral user-pill__menu-mobile" id="install-menu-btn" hidden>Install app</button>
+            <a role="menuitem" class="user-pill__menu-item user-pill__menu-item--neutral user-pill__menu-mobile" href="./index.html">About Taskboards</a>
+            <button role="menuitem" class="user-pill__menu-item user-pill__menu-item--neutral user-pill__menu-mobile" id="theme-menu-btn">
               <span id="theme-menu-icon"></span><span id="theme-menu-label">Light theme</span>
             </button>
             <div class="user-pill__menu-divider"></div>
-            <button class="user-pill__menu-item user-pill__menu-item--neutral" id="report-btn">Export board report (.md)</button>
-            <button class="user-pill__menu-item user-pill__menu-item--neutral" id="report-pdf-btn">Export board report (.pdf)</button>
-            <button class="user-pill__menu-item user-pill__menu-item--neutral" id="export-btn">Export backup (.json)</button>
-            <button class="user-pill__menu-item user-pill__menu-item--neutral" id="import-btn">Import backup…</button>
+            <button role="menuitem" class="user-pill__menu-item user-pill__menu-item--neutral" id="report-btn">Export board report (.md)</button>
+            <button role="menuitem" class="user-pill__menu-item user-pill__menu-item--neutral" id="report-pdf-btn">Export board report (.pdf)</button>
+            <button role="menuitem" class="user-pill__menu-item user-pill__menu-item--neutral" id="export-btn">Export backup (.json)</button>
+            <button role="menuitem" class="user-pill__menu-item user-pill__menu-item--neutral" id="import-btn">Import backup…</button>
             <div class="user-pill__menu-divider"></div>
-            <button class="user-pill__menu-item" id="logout-btn">Sign out</button>
+            <button role="menuitem" class="user-pill__menu-item" id="logout-btn">Sign out</button>
             <div class="sync-status" id="sync-status">
               <span class="sync-dot" id="sync-dot"></span>
               <span id="sync-label">Offline</span>
@@ -250,16 +252,16 @@
   </button>
 
   <!-- ── NEW CARD MODAL ── -->
-  <div id="modal-overlay" class="modal-overlay hidden">
-    <div class="modal" id="modal">
+  <div id="modal-overlay" class="modal-overlay" data-dialog-overlay hidden>
+    <div class="modal" id="modal" data-dialog-panel>
       <div class="modal__header">
         <span class="modal__title" id="modal-title">NEW CARD</span>
-        <button class="modal__close" id="modal-close">✕</button>
+        <button class="modal__close" id="modal-close" data-dialog-close aria-label="Close">✕</button>
       </div>
       <div class="modal__body">
         <div class="modal__field">
           <label class="modal__label" for="input-title">TITLE *</label>
-          <input class="modal__input" id="input-title" type="text" placeholder="Task name..." maxlength="80" autocomplete="off" />
+          <input class="modal__input" id="input-title" type="text" autofocus placeholder="Task name..." maxlength="80" autocomplete="off" />
         </div>
         <div class="modal__field">
           <label class="modal__label" for="input-owner">OWNER</label>
@@ -306,11 +308,11 @@
   </div>
 
   <!-- ── HELP MODAL ── -->
-  <div id="help-overlay" class="modal-overlay hidden">
-    <div class="modal modal--help" id="help-modal">
+  <div id="help-overlay" class="modal-overlay" data-dialog-overlay hidden>
+    <div class="modal modal--help" id="help-modal" data-dialog-panel>
       <div class="modal__header">
         <span class="modal__title">HOW IT WORKS</span>
-        <button class="modal__close" id="help-close">✕</button>
+        <button class="modal__close" id="help-close" data-dialog-close aria-label="Close">✕</button>
       </div>
       <div class="help__body">
         <div class="help__section">
@@ -365,16 +367,17 @@
   </div>
 
   <!-- ── SHARE MODAL ── -->
-  <div id="share-overlay" class="modal-overlay hidden">
-    <div class="modal modal--share" id="share-modal" role="dialog" aria-labelledby="share-title">
+  <div id="share-overlay" class="modal-overlay" data-dialog-overlay hidden>
+    <div class="modal modal--share" id="share-modal" data-dialog-panel aria-labelledby="share-title">
       <div class="modal__header">
         <span class="modal__title" id="share-title">SHARE BOARD</span>
-        <button class="modal__close" id="share-close" aria-label="Close">✕</button>
+        <button class="modal__close" id="share-close" data-dialog-close aria-label="Close">✕</button>
       </div>
       <div class="modal__body" id="share-body"></div>
     </div>
   </div>
 
+  <script src="./nimble/behaviors.js"></script>
   <script src="./share-core.js"></script>
   <script src="./app.js"></script>
 
