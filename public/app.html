@@ -1,11 +1,8 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="dark">
+<html lang="en" data-theme="dark" data-accent="rose">
 <head>
-  <script>
-    (function () {
-      try { document.documentElement.setAttribute('data-theme', localStorage.getItem('taskboards-theme') || 'dark'); } catch (e) {}
-    })();
-  </script>
+  <meta name="nimble-theme-key" content="taskboards-theme" />
+  <script src="./nimble/theme.js"></script>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <meta name="theme-color" content="#141414" />
@@ -17,6 +14,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="./nimble/tokens.css" />
   <link rel="stylesheet" href="./style.css" />
   <script src="./config.js"></script>
   <!-- Force SW update if stale -->

@@ -3541,22 +3541,19 @@ q('#help-close').addEventListener('click',()=>q('#help-overlay').classList.add('
 q('#help-overlay').addEventListener('click', e=>{ if(e.target===q('#help-overlay')) q('#help-overlay').classList.add('hidden'); });
 
 // ─── THEME ────────────────────────────────────────────────────────────────────
-function initTheme() {
-  applyTheme(localStorage.getItem(LS_THEME) || 'dark', false);
-}
-function applyTheme(theme, animate=true) {
-  document.documentElement.setAttribute('data-theme', theme);
+function initTheme() { paintTheme(document.documentElement.getAttribute('data-theme')); }
+// nimble/theme.js owns the preference (auto | light | dark, key taskboards-theme) and fires nimble:theme; this repaints the app's own bits
+function paintTheme(theme) {
   q('#theme-icon').innerHTML = theme==='dark' ? ICON_SUN : ICON_MOON;   // same icons as Roadmaps: the icon offers the other theme
   q('#theme-menu-icon').innerHTML = theme==='dark' ? ICON_SUN : ICON_MOON;
   q('#theme-menu-label').textContent = theme==='dark' ? 'Light theme' : 'Dark theme';
-  localStorage.setItem(LS_THEME, theme);
   const mc=document.querySelector('meta[name="theme-color"]');
   // browser chrome follows the theme's own background, so light and dark stay consistent
-  if(mc) mc.setAttribute('content', getComputedStyle(document.documentElement).getPropertyValue('--f-bg1').trim() || (theme==='dark' ? '#141414' : '#ffffff'));
+  if(mc) mc.setAttribute('content', getComputedStyle(document.documentElement).getPropertyValue('--f-bg1').trim() || (theme==='dark' ? '#18181b' : '#ffffff'));
 }
+document.addEventListener('nimble:theme', e => paintTheme(e.detail.theme));
 function toggleTheme(origin) {
-  const cur=document.documentElement.getAttribute('data-theme');
-  applyTheme(cur==='dark'?'light':'dark');
+  NimbleTheme.set(document.documentElement.getAttribute('data-theme')==='dark' ? 'light' : 'dark');
   burstParticles(origin);
 }
 q('#theme-btn').addEventListener('click', ()=>toggleTheme(q('#theme-btn')));
