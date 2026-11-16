@@ -169,8 +169,11 @@ button { cursor: pointer; }
 /* ── Toast ───────────────────────────────────────────────────────────────── */
 .toasts { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); z-index: 200; display: flex; flex-direction: column; gap: 8px; align-items: center; pointer-events: none; }
 .toast { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-radius: var(--r-md); background: var(--surface); border: 1px solid var(--border-strong); box-shadow: var(--sh-lg); font-size: .875rem; animation: pop var(--norm) var(--ease); }
-.toast .ico { color: var(--success); }
-.toast--warn .ico { color: var(--warn); }
+.toast__icon { display: inline-flex; color: var(--success); }
+.toast--info .toast__icon { color: var(--info); }
+.toast--warn .toast__icon { color: var(--warn); }
+.toast--error .toast__icon { color: var(--danger); }
+.toast--loading .toast__icon { color: var(--primary-fg); }
 
 /* ── Landing / product page ──────────────────────────────────────────────── */
 .lp-hero { padding: 80px 24px 40px; text-align: center; }

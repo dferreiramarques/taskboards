@@ -97,6 +97,13 @@
   --tb-shadow:       var(--shadow-c);
 }
 
+/* ── nimbleUI compatibility ──
+   The kit is loaded in the "nimble" cascade layer (nimble/components.layered.css), so this app's own rules always win.
+   Its base rules (button/input font: inherit, sticky blurred .topbar) still apply where the app says nothing; these keep the app's metrics. */
+button, input, select, textarea { line-height: normal; }
+.card__actions { opacity: 1; }   /* the kit hides .card__actions until hover; here the app decides (armed card) */
+.topbar { backdrop-filter: none; -webkit-backdrop-filter: none; }
+
 /* ── Reset ── */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -1287,8 +1294,9 @@ kbd {
 .auth-gate__link:hover { color: var(--f-fg1); }
 .auth-gate__link.hidden { display: none; }
 
-.user-pill {
-  position: relative;
+.user-pill { position: relative; display: flex; align-items: center; }
+.user-pill.hidden { display: none !important; }
+.user-pill__btn {
   display: flex; align-items: center;
   height: 36px;
   padding: 0 10px 0 4px;
@@ -1296,11 +1304,11 @@ kbd {
   border-radius: var(--f-rpill);
   border: 1px solid var(--f-stroke2);
   background: var(--f-bg1);
+  color: inherit;
   cursor: pointer;
   transition: background var(--f-fast), border-color var(--f-fast);
 }
-.user-pill.hidden { display: none !important; }
-.user-pill:hover { background: var(--f-bg2); }
+.user-pill__btn:hover { background: var(--f-bg2); }
 
 .user-pill__avatar { width: 28px; height: 28px; border-radius: 50%; object-fit: cover; background: var(--f-bg3); }
 .user-pill__name {
@@ -1316,9 +1324,9 @@ kbd {
   border-radius: var(--f-r8);
   box-shadow: var(--f-shadow16);
   padding: 6px 0;
-  display: none; z-index: 500;
+  z-index: 500;
+  animation: none;
 }
-.user-pill.open .user-pill__menu { display: block; }
 .user-pill__menu-email { padding: 4px 14px 8px; font-size: .6875rem; color: var(--f-fg3); overflow: hidden; text-overflow: ellipsis; }
 .user-pill__menu-divider { height: 1px; background: var(--f-stroke2); margin: 4px 0; }
 .user-pill__menu-item {
@@ -1343,33 +1351,7 @@ a.user-pill__menu-item { text-decoration: none; box-sizing: border-box; }
 .sync-dot.error   { background: var(--f-danger); }
 @keyframes sync-pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
 
-/* ══════════════════════════════════════════════════════
-   TOAST
-   ══════════════════════════════════════════════════════ */
-.toast-container {
-  position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
-  display: flex; flex-direction: column; gap: 6px;
-  z-index: 9990; pointer-events: none;
-}
-.toast {
-  display: flex; align-items: center; gap: 10px;
-  padding: 10px 16px;
-  background: var(--f-bg1);
-  border: 1px solid var(--f-stroke1);
-  border-radius: var(--f-r4);
-  box-shadow: var(--f-shadow16);
-  font-size: .8125rem;
-  color: var(--f-fg1);
-  white-space: nowrap;
-  opacity: 0; transform: translateY(10px);
-  transition: opacity var(--f-normal), transform var(--f-normal);
-}
-.toast--visible { opacity: 1; transform: none; }
-.toast__icon { font-size: 14px; flex-shrink: 0; }
-.toast--success .toast__icon { color: var(--f-success); }
-.toast--error   .toast__icon { color: var(--f-danger); }
-.toast--info    .toast__icon { color: var(--f-brand); }
-.toast__message { font-size: .75rem; }
+/* Toasts: nimbleUI (NimbleUI.toast, .toasts / .toast in the kit). */
 
 /* ══════════════════════════════════════════════════════
    SKELETON
@@ -1524,7 +1506,7 @@ body.matrix-view .matrix-btn, body.matrix-view.done-expanded .matrix-btn { botto
 @media (max-width: 700px) {
   .topbar { gap: 8px; padding: 8px 12px; flex-wrap: nowrap; }
   .topbar__brand, .topbar__name, #sync-chip, #help-btn, #install-btn, #theme-btn, #add-board, .user-pill__name, .user-pill__avatar { display: none; }
-  .user-pill { padding: 0; width: 36px; justify-content: center; }
+  .user-pill__btn { padding: 0; width: 36px; justify-content: center; }
   .user-pill__burger { display: block; width: 18px; height: 18px; color: var(--f-fg1); }
   .user-pill__menu-mobile { display: block; }
   .user-pill__menu-mobile[hidden] { display: none; }

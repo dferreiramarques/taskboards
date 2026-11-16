@@ -1,0 +1,6 @@
+/* For apps that already have their own CSS: load this instead of components.css.
+   The whole kit goes into the "nimble" cascade layer, and un-layered app CSS always wins over a layer, so
+   same-named legacy classes (.card, .toast, .topbar…) keep the app's look while .menu/.overlay/.dialog/… still work.
+   Remove it in favour of components.css once the app's own components are renamed or replaced. */
+@layer nimble;
+@import url("components.css") layer(nimble);
