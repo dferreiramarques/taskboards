@@ -236,7 +236,8 @@ body.has-dialog { overflow: hidden; }
 [data-handle] { cursor: grab; }
 .is-dragging { opacity: .4; }
 html.is-sorting, html.is-sorting * { cursor: grabbing !important; user-select: none; -webkit-user-select: none; }
-.drag-ghost { position: fixed; left: 0; top: 0; z-index: 9999; width: var(--w); margin: 0; pointer-events: none; opacity: .92; transform: translate(var(--x, 0px), var(--y, 0px)) rotate(-1.5deg); box-shadow: var(--sh-lg); }
+/* the ghost is a clone of the dragged item and keeps its classes (.card…): !important so an app's own rules for those classes can never put it back in the layout */
+.drag-ghost { position: fixed !important; left: 0 !important; top: 0 !important; z-index: 9999 !important; width: var(--w) !important; margin: 0 !important; pointer-events: none !important; opacity: .92; transform: translate(var(--x, 0px), var(--y, 0px)) rotate(-1.5deg) !important; box-shadow: var(--sh-lg); }
 .drop-slot--x { width: 3px; height: auto; align-self: stretch; margin: 0 -2px; }
 [data-grabbed="true"] { outline: 2px solid var(--primary); outline-offset: 2px; box-shadow: var(--sh-lg); }
 [data-sortable].over { background: color-mix(in srgb, var(--primary) 7%, transparent); border-radius: var(--r-lg); }

@@ -126,7 +126,7 @@
   </div>
 
   <!-- ── ARCHIVE BAR ── -->
-  <div id="archive-bar" class="shelf shelf--archive" data-zone="archive">
+  <div id="archive-bar" data-sortable-zone data-sortable-drop="#archive-cards" class="shelf shelf--archive" data-zone="archive">
     <div class="shelf__header" id="archive-toggle">
       <div class="shelf__header-left">
         <span class="shelf__icon">◈</span>
@@ -139,7 +139,7 @@
       </div>
     </div>
     <div class="shelf__body" id="archive-body">
-      <div class="shelf__cards" id="archive-cards"></div>
+      <div class="shelf__cards" id="archive-cards" data-sortable data-sortable-group="cards" data-sortable-over="drag-over"></div>
       <div class="shelf__empty" id="archive-empty">Drag cards here to park ideas for later</div>
     </div>
     <div class="drop-overlay" id="archive-drop-overlay">
@@ -149,13 +149,13 @@
 
   <!-- ── MAIN BOARD ── -->
   <main class="board" id="board">
-    <section class="column column--todo" id="todo-column" data-zone="todo">
+    <section class="column column--todo" id="todo-column" data-sortable-zone data-sortable-drop="#todo-cards" data-zone="todo">
       <div class="column__header">
         <span class="column__dot"></span>
         <span class="column__title">TO DO</span>
         <span class="column__count" id="todo-count">0</span>
       </div>
-      <div class="column__cards" id="todo-cards">
+      <div class="column__cards" id="todo-cards" data-sortable data-sortable-group="cards" data-sortable-over="drag-over">
         <div class="column__empty" id="todo-empty">
           <span class="column__empty-icon">○</span>
           <span>No tasks yet</span>
@@ -163,13 +163,13 @@
       </div>
     </section>
     <div class="board__divider"></div>
-    <section class="column column--inprogress" id="inprogress-column" data-zone="inprogress">
+    <section class="column column--inprogress" id="inprogress-column" data-sortable-zone data-sortable-drop="#inprogress-cards" data-zone="inprogress">
       <div class="column__header">
         <span class="column__dot"></span>
         <span class="column__title">IN PROGRESS</span>
         <span class="column__count" id="inprogress-count">0</span>
       </div>
-      <div class="column__cards" id="inprogress-cards">
+      <div class="column__cards" id="inprogress-cards" data-sortable data-sortable-group="cards" data-sortable-over="drag-over">
         <div class="column__empty" id="inprogress-empty">
           <span class="column__empty-icon">◑</span>
           <span>Nothing in progress</span>
@@ -179,7 +179,7 @@
   </main>
 
   <!-- ── DONE BAR ── -->
-  <div id="done-bar" class="shelf shelf--done" data-zone="done">
+  <div id="done-bar" data-sortable-zone data-sortable-drop="#done-cards" class="shelf shelf--done" data-zone="done">
     <div class="shelf__header" id="done-toggle">
       <div class="shelf__header-left">
         <span class="shelf__icon shelf__icon--done">✓</span>
@@ -197,15 +197,13 @@
       </div>
     </div>
     <div class="shelf__body shelf__body--done" id="done-body">
-      <div class="shelf__cards" id="done-cards"></div>
+      <div class="shelf__cards" id="done-cards" data-sortable data-sortable-group="cards" data-sortable-over="drag-over"></div>
       <div class="shelf__empty" id="done-empty">Drag completed cards here</div>
     </div>
     <div class="drop-overlay" id="done-drop-overlay">
       <span class="drop-overlay__icon">✓</span><span>MARK DONE</span>
     </div>
   </div>
-
-  <div id="drag-ghost" class="drag-ghost"></div>
 
   <!-- ── QUICK-WINS MATRIX (replaces the board while on) ── -->
   <section id="matrix" class="matrix" aria-label="Quick-wins matrix">
