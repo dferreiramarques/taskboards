@@ -3,7 +3,7 @@
    Extracted from Roadmaps, Taskboards and Diagramico (one shared system, three accents).
    RULE: dark/light only swap COLOUR tokens. Sizes, spacing, radii, type and shadow geometry
    are defined once in :root. Never put a non-colour property in a [data-theme] block.
-   Accent = data-accent on <html>: emerald (default, Roadmaps) · rose (Taskboards) · indigo (Diagramico).
+   Accent = data-accent on <html>: emerald (default, Roadmaps) · rose (Taskboards) · indigo (Diagramico) · amber (Veredicto).
    ═══════════════════════════════════════════════════════════════════════════ */
 :root {
   /* type */
@@ -112,3 +112,6 @@
 /* Diagramico — indigo */
 [data-theme="light"][data-accent="indigo"] { --primary: #3347d4; --primary-h: #2a3bb0; --primary-fg: #2a3bb0; --primary-ink: #ffffff; --primary-soft: rgba(51, 71, 212, .12); --glow: rgba(51, 71, 212, .10); }
 [data-theme="dark"][data-accent="indigo"]  { --primary: #8b98ff; --primary-h: #a9b3ff; --primary-fg: #8b98ff; --primary-ink: #11131a; --primary-soft: rgba(139, 152, 255, .16); --glow: rgba(139, 152, 255, .12); }
+/* Veredicto — amber (burnt yellow). --primary-ink is dark because the accent is light. */
+[data-theme="light"][data-accent="amber"] { --primary: #d9a21b; --primary-h: #c48d0f; --primary-fg: #8a5f00; --primary-ink: #2a1d00; --primary-soft: rgba(217, 162, 27, .16); --glow: rgba(217, 162, 27, .10); }
+[data-theme="dark"][data-accent="amber"]  { --primary: #f0bf3c; --primary-h: #f6cf63; --primary-fg: #f0bf3c; --primary-ink: #2a1d00; --primary-soft: rgba(240, 191, 60, .16); --glow: rgba(240, 191, 60, .12); }
